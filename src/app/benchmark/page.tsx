@@ -51,8 +51,7 @@ export default function BenchmarkStudioPage() {
   };
 
   return (
-    <div className="min-h-screen bg-slate-950 text-slate-100 p-6 md:p-10 font-sans">
-      <div className="max-w-7xl mx-auto space-y-8">
+    <div className="space-y-8">
         
         {/* Navigation Breadcrumb */}
         <div className="flex items-center justify-between border-b border-slate-800 pb-4">
@@ -295,8 +294,6 @@ export default function BenchmarkStudioPage() {
             </button>
           </div>
         )}
-
-      </div>
     </div>
   );
 }

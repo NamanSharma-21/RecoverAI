@@ -70,8 +70,7 @@ export default function SettingsPage() {
   };
 
   return (
-    <div className="min-h-screen bg-slate-950 text-slate-100 p-6 md:p-10 font-sans">
-      <div className="max-w-4xl mx-auto space-y-8">
+    <div className="space-y-8">
         
         {/* Navigation & Header */}
         <div className="flex items-center justify-between border-b border-slate-800 pb-6">
@@ -243,8 +242,6 @@ export default function SettingsPage() {
           </div>
 
         </form>
-
-      </div>
     </div>
   );
 }

@@ -38,8 +38,7 @@ export default function GoldenDemoPage() {
   );
 
   return (
-    <div className="min-h-screen bg-slate-950 text-slate-100 p-6 md:p-10 font-sans">
-      <div className="max-w-7xl mx-auto space-y-8">
+    <div className="space-y-8">
         
         {/* Navigation Breadcrumb */}
         <div className="flex items-center justify-between border-b border-slate-800 pb-4">
@@ -88,7 +87,7 @@ export default function GoldenDemoPage() {
                   </span>
                   <span className="text-xs font-bold text-emerald-400">₹4,999.00</span>
                 </div>
-                <h3 className="text-base font-bold text-white mb-2">Transient Failure $\rightarrow$ Auto-Recovery $\rightarrow$ Captured</h3>
+                <h3 className="text-base font-bold text-white mb-2">Transient Failure → Auto-Recovery → Captured</h3>
                 <p className="text-xs text-slate-400 leading-relaxed mb-4">
                   Payment fails with temporary bank gateway timeout. AI diagnoses transient drop (92% confidence), Policy approves within ₹5,000 limit, controlled action executes, and authoritative success verifies ₹4,999 recovered revenue.
                 </p>
@@ -118,7 +117,7 @@ export default function GoldenDemoPage() {
                   </span>
                   <span className="text-xs font-bold text-purple-300">₹1,20,000.00</span>
                 </div>
-                <h3 className="text-base font-bold text-white mb-2">High-Ticket Order $\rightarrow$ Policy Blocks $\rightarrow$ Human Review</h3>
+                <h3 className="text-base font-bold text-white mb-2">High-Ticket Order → Policy Blocks → Human Review</h3>
                 <p className="text-xs text-slate-400 leading-relaxed mb-4">
                   Even if AI recommends autonomous recovery, deterministic policy intercepts transactions &gt; ₹25,000 threshold. Strictly blocks unauthorized money movement and routes to merchant operator review queue.
                 </p>
@@ -243,7 +242,6 @@ export default function GoldenDemoPage() {
           </div>
         </div>
 
-      </div>
     </div>
   );
 }
