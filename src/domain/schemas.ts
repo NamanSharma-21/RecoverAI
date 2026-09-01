@@ -2,13 +2,16 @@ import { z } from 'zod';
 import { APPROVED_ACTIONS } from './types';
 
 export const ApprovedActionSchema = z.enum([
-  'RETRY',
-  'SEND_RECOVERY_LINK',
+  'RETRY_NOW',
+  'RETRY_LATER',
   'CREATE_OR_REUSE_PAYMENT_LINK',
-  'OFFER_ALTERNATE_PAYMENT_METHOD',
+  'OFFER_ALTERNATE_METHOD',
   'WAIT',
   'ESCALATE',
   'STOP',
+  'RETRY',
+  'SEND_RECOVERY_LINK',
+  'OFFER_ALTERNATE_PAYMENT_METHOD',
 ]);
 
 export const CaseStatusSchema = z.enum([
@@ -49,6 +52,7 @@ export const CustomerContextSchema = z.object({
   total_prior_transactions: z.number().int().nonnegative().optional(),
   prior_failed_transactions: z.number().int().nonnegative().optional(),
   lifetime_value: z.number().nonnegative().optional(),
+  is_returning_customer: z.boolean().optional(),
 });
 
 export const PaymentFailureContextSchema = z.object({
@@ -70,11 +74,12 @@ export const AIDecisionOutputSchema = z.object({
   diagnosis: z.string().min(3, 'Diagnosis must be descriptive'),
   failure_category: z.string().default('TRANSIENT'),
   recoverability: z.number().min(0).max(1).default(0.7),
+  expected_recovery_value: z.number().nonnegative('Expected recovery value must be non-negative').optional().default(0),
   recommended_action: ApprovedActionSchema,
+  timing: z.string().default('IMMEDIATE'),
   confidence: z.number().min(0).max(1, 'Confidence must be between 0.0 and 1.0'),
   reason: z.string().min(3, 'Reason must be provided'),
   customer_friction: z.enum(['LOW', 'MEDIUM', 'HIGH']).default('LOW'),
-  expected_recovery_value: z.number().nonnegative('Expected recovery value must be non-negative').optional(),
   evidence: z.array(z.string()).default([]),
   rationale: z.string().optional(),
 });
@@ -157,3 +162,13 @@ export const HumanReviewActionRequestSchema = z.object({
 });
 
 export type HumanReviewActionRequest = z.infer<typeof HumanReviewActionRequestSchema>;
+
+export const MerchantSettingsUpdateSchema = z.object({
+  autonomous_limit_inr: z.number().positive().optional(),
+  bounded_limit_inr: z.number().positive().optional(),
+  human_approval_above_inr: z.number().positive().optional(),
+  max_interventions_per_case: z.number().int().min(1).max(10).optional(),
+  recovery_cooldown_minutes: z.number().int().min(1).max(1440).optional(),
+  max_contact_frequency_hours: z.number().int().min(1).max(72).optional(),
+  min_confidence_for_autonomous_action: z.number().min(0).max(1).optional(),
+});

@@ -45,8 +45,10 @@ CREATE TABLE IF NOT EXISTS decisions (
   diagnosis TEXT NOT NULL,
   failure_category TEXT NOT NULL DEFAULT 'TRANSIENT',
   recoverability REAL NOT NULL DEFAULT 0.5,
+  expected_recovery_value INTEGER NOT NULL DEFAULT 0,
   evidence TEXT NOT NULL, -- JSON array of strings
   recommended_action TEXT NOT NULL,
+  timing TEXT NOT NULL DEFAULT 'IMMEDIATE',
   confidence REAL NOT NULL,
   reason TEXT NOT NULL DEFAULT '',
   customer_friction TEXT NOT NULL DEFAULT 'LOW',
@@ -100,6 +102,12 @@ CREATE TABLE IF NOT EXISTS audit_events (
 
 CREATE INDEX IF NOT EXISTS idx_audit_events_case_id ON audit_events(case_id);
 CREATE INDEX IF NOT EXISTS idx_audit_events_timestamp ON audit_events(timestamp);
+
+CREATE TABLE IF NOT EXISTS merchant_settings (
+  merchant_id TEXT PRIMARY KEY,
+  settings_json TEXT NOT NULL,
+  updated_at TEXT NOT NULL
+);
 
 CREATE TABLE IF NOT EXISTS benchmark_runs (
   id TEXT PRIMARY KEY,

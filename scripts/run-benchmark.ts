@@ -6,10 +6,10 @@ async function main() {
   console.log('================================================================\n');
 
   const runner = new BenchmarkRunner();
-  console.log('Generating seeded dataset (1,200 total cases, 600 held-out test split, seed=42)...');
+  console.log('Generating seeded dataset (5,000 total cases, 2,500 held-out test split, seed=42)...');
   console.log('Evaluating 5 candidate strategies against hidden latent ground truth...\n');
 
-  const report = await runner.runBenchmark(1200, 42);
+  const report = await runner.runBenchmark(5000, 42);
 
   console.log('---------------------------------------------------------------------------------------------------------');
   console.log(

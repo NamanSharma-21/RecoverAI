@@ -2,19 +2,6 @@
 
 import React, { useState } from 'react';
 import Link from 'next/link';
-import {
-  PlayCircle,
-  ShieldCheck,
-  CheckCircle,
-  XCircle,
-  AlertTriangle,
-  ArrowRight,
-  Brain,
-  RefreshCw,
-  History,
-  FileCheck,
-  Zap,
-} from 'lucide-react';
 import { GOLDEN_SCENARIOS } from '@/simulator/scenarios';
 
 export default function GoldenDemoPage() {
@@ -42,151 +29,220 @@ export default function GoldenDemoPage() {
     }
   };
 
+  const flagshipScenarios = GOLDEN_SCENARIOS.filter(
+    (s) => s.id === 'golden_01_transient_retry' || s.id === 'golden_05_high_value_escalation'
+  );
+
+  const otherScenarios = GOLDEN_SCENARIOS.filter(
+    (s) => s.id !== 'golden_01_transient_retry' && s.id !== 'golden_05_high_value_escalation'
+  );
+
   return (
-    <div className="space-y-8">
-      {/* Golden Demo Header */}
-      <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4 bg-gradient-to-r from-blue-950/40 via-slate-900 to-purple-950/40 border border-blue-900/40 rounded-xl p-6 shadow-xl">
-        <div>
-          <div className="flex items-center gap-2 text-blue-400 text-xs font-semibold uppercase tracking-wider mb-1">
-            <PlayCircle className="w-4 h-4 text-blue-400" />
-            Golden Scenario Test & Demo Suite
+    <div className="min-h-screen bg-slate-950 text-slate-100 p-6 md:p-10 font-sans">
+      <div className="max-w-7xl mx-auto space-y-8">
+        
+        {/* Navigation Breadcrumb */}
+        <div className="flex items-center justify-between border-b border-slate-800 pb-4">
+          <div className="flex items-center space-x-3">
+            <Link href="/" className="text-slate-400 hover:text-white text-xs">
+              ← Back to Recovery Dashboard
+            </Link>
+            <span className="text-slate-600">/</span>
+            <span className="text-xs font-semibold text-slate-200">Golden Demo Studio</span>
           </div>
-          <h1 className="text-2xl font-bold text-white tracking-tight">
-            10 Authoritative Golden Verification Scenarios
+
+          <div className="flex items-center space-x-2 text-xs">
+            <span className="px-2.5 py-1 rounded bg-blue-500/10 text-blue-400 border border-blue-500/20 font-medium">
+              10 Verifiable Fixtures
+            </span>
+          </div>
+        </div>
+
+        {/* Page Header */}
+        <div className="bg-gradient-to-r from-blue-950/40 via-slate-900 to-purple-950/40 border border-blue-900/40 rounded-2xl p-6 md:p-8 shadow-xl">
+          <h1 className="text-2xl md:text-3xl font-bold text-white tracking-tight">
+            Golden Demo & Verification Studio
           </h1>
-          <p className="text-sm text-gray-400 mt-1">
-            Trigger individual end-to-end recovery scenarios to verify deterministic guardrails and closed-loop behavior.
+          <p className="text-xs md:text-sm text-slate-400 mt-2 max-w-3xl">
+            Execute deterministic closed control loop scenarios. Evaluates real state transitions, AI structured diagnosis, tiered policy guardrails, controlled action execution, and authoritative capture verification.
           </p>
         </div>
-      </div>
 
-      {/* Active Execution Inspector (if scenario was run) */}
-      {activeResult && activeResult.result && (
-        <div className="bg-gray-900 border border-blue-800/80 rounded-xl p-6 shadow-2xl space-y-6">
-          <div className="flex items-center justify-between border-b border-gray-800 pb-4">
-            <div>
-              <div className="text-xs text-blue-400 font-semibold uppercase tracking-wider">
-                Live Control Loop Execution Result
-              </div>
-              <h2 className="text-xl font-bold text-white font-mono mt-0.5">
-                {activeResult.scenario || activeResult.result.case.id}
-              </h2>
-            </div>
-
-            <Link
-              href={`/cases/${activeResult.result.case.id}`}
-              className="px-4 py-2 bg-blue-600 hover:bg-blue-500 text-white rounded-lg text-xs font-semibold flex items-center gap-1.5 transition"
-            >
-              Inspect Case Detail <ArrowRight className="w-3.5 h-3.5" />
-            </Link>
+        {/* ========================================================================= */}
+        {/* FLAGSHIP 5-MINUTE PRODUCT DEMOS */}
+        {/* ========================================================================= */}
+        <div>
+          <div className="flex items-center space-x-2 mb-4">
+            <span className="w-2.5 h-2.5 rounded-full bg-blue-400"></span>
+            <h2 className="text-base font-bold text-white">Flagship 5-Minute Product Stories</h2>
           </div>
 
-          {/* 4-Step Pipeline Visualizer */}
-          <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
-            <div className="bg-gray-950 p-4 rounded-lg border border-gray-800 space-y-1">
-              <span className="text-[11px] text-gray-500 uppercase font-semibold">1. Webhook Ingested</span>
-              <div className="text-sm font-semibold text-white truncate">
-                {activeResult.result.case.failure_code}
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+            
+            {/* Story 1: ₹5,000 Normal Autonomous Flow */}
+            <div className="bg-slate-900 border border-emerald-500/30 rounded-2xl p-6 shadow-lg flex flex-col justify-between">
+              <div>
+                <div className="flex items-center justify-between mb-3">
+                  <span className="px-2.5 py-0.5 rounded-full bg-emerald-500/10 text-emerald-400 border border-emerald-500/20 text-[11px] font-semibold">
+                    STORY A: AUTONOMOUS RECOVERY
+                  </span>
+                  <span className="text-xs font-bold text-emerald-400">₹4,999.00</span>
+                </div>
+                <h3 className="text-base font-bold text-white mb-2">Transient Failure $\rightarrow$ Auto-Recovery $\rightarrow$ Captured</h3>
+                <p className="text-xs text-slate-400 leading-relaxed mb-4">
+                  Payment fails with temporary bank gateway timeout. AI diagnoses transient drop (92% confidence), Policy approves within ₹5,000 limit, controlled action executes, and authoritative success verifies ₹4,999 recovered revenue.
+                </p>
+                <div className="bg-slate-950 p-3 rounded-xl border border-slate-800 text-[11px] font-mono text-slate-300 space-y-1 mb-4">
+                  <div>1. Failure: GATEWAY_ERROR (card)</div>
+                  <div>2. AI Recommendation: RETRY (Cooldown: 15m)</div>
+                  <div>3. Policy Result: ALLOW (Autonomous)</div>
+                  <div>4. Outcome: Verified Captured ✓</div>
+                </div>
               </div>
-              <div className="text-xs text-gray-400 font-mono">
-                ₹{(activeResult.result.case.amount / 100).toFixed(2)} • {activeResult.result.case.payment_method}
-              </div>
+
+              <button
+                onClick={() => runScenario('golden_01_transient_retry')}
+                disabled={runningScenario === 'golden_01_transient_retry'}
+                className="w-full py-2.5 bg-emerald-600 hover:bg-emerald-500 disabled:opacity-50 text-white rounded-xl text-xs font-semibold shadow-lg shadow-emerald-600/20 transition"
+              >
+                {runningScenario === 'golden_01_transient_retry' ? 'Executing Control Loop...' : '⚡ Run Autonomous Recovery Story'}
+              </button>
             </div>
 
-            <div className="bg-gray-950 p-4 rounded-lg border border-gray-800 space-y-1">
-              <span className="text-[11px] text-purple-400 uppercase font-semibold">2. AI Diagnosis</span>
-              <div className="text-sm font-semibold text-purple-300 truncate">
-                {activeResult.result.decision?.recommended_action || 'N/A'}
+            {/* Story 2: ₹120,000 High-Value Guardrail Escalation */}
+            <div className="bg-slate-900 border border-purple-500/30 rounded-2xl p-6 shadow-lg flex flex-col justify-between">
+              <div>
+                <div className="flex items-center justify-between mb-3">
+                  <span className="px-2.5 py-0.5 rounded-full bg-purple-500/10 text-purple-400 border border-purple-500/20 text-[11px] font-semibold">
+                    STORY B: SAFETY GUARDRAIL
+                  </span>
+                  <span className="text-xs font-bold text-purple-300">₹1,20,000.00</span>
+                </div>
+                <h3 className="text-base font-bold text-white mb-2">High-Ticket Order $\rightarrow$ Policy Blocks $\rightarrow$ Human Review</h3>
+                <p className="text-xs text-slate-400 leading-relaxed mb-4">
+                  Even if AI recommends autonomous recovery, deterministic policy intercepts transactions &gt; ₹25,000 threshold. Strictly blocks unauthorized money movement and routes to merchant operator review queue.
+                </p>
+                <div className="bg-slate-950 p-3 rounded-xl border border-slate-800 text-[11px] font-mono text-slate-300 space-y-1 mb-4">
+                  <div>1. Failure: GATEWAY_ERROR (netbanking)</div>
+                  <div>2. AI Recommendation: ESCALATE / HIGH VALUE</div>
+                  <div>3. Policy Result: ESCALATE (Amount &gt; Limit)</div>
+                  <div>4. State: HUMAN_REVIEW (Safe) ✓</div>
+                </div>
               </div>
-              <div className="text-xs text-gray-400">
-                Confidence: {Math.round((activeResult.result.decision?.confidence || 0) * 100)}%
-              </div>
+
+              <button
+                onClick={() => runScenario('golden_05_high_value_escalation')}
+                disabled={runningScenario === 'golden_05_high_value_escalation'}
+                className="w-full py-2.5 bg-purple-600 hover:bg-purple-500 disabled:opacity-50 text-white rounded-xl text-xs font-semibold shadow-lg shadow-purple-600/20 transition"
+              >
+                {runningScenario === 'golden_05_high_value_escalation' ? 'Executing Control Loop...' : '⚡ Run Policy Block Story'}
+              </button>
             </div>
 
-            <div className="bg-gray-950 p-4 rounded-lg border border-gray-800 space-y-1">
-              <span className="text-[11px] text-emerald-400 uppercase font-semibold">3. Policy Check</span>
-              <div className="text-sm font-semibold text-emerald-300">
-                {activeResult.result.policyCheck?.policy_result || 'N/A'}
-              </div>
-              <div className="text-xs text-gray-400 truncate">
-                Allowed: {activeResult.result.policyCheck?.allowed ? 'Yes' : 'No'}
-              </div>
-            </div>
-
-            <div className="bg-gray-950 p-4 rounded-lg border border-gray-800 space-y-1">
-              <span className="text-[11px] text-blue-400 uppercase font-semibold">4. Final State</span>
-              <div className="text-sm font-semibold text-blue-300">
-                {activeResult.result.transitionedTo}
-              </div>
-              <div className="text-xs text-gray-400">
-                Attempt {activeResult.result.case.attempt_count}
-              </div>
-            </div>
-          </div>
-
-          <div className="bg-gray-950 p-3.5 rounded-lg border border-gray-800/80 text-xs text-gray-300">
-            <span className="font-semibold text-gray-200">Execution Summary: </span>
-            {activeResult.result.message}
           </div>
         </div>
-      )}
 
-      {/* Grid of 10 Golden Scenarios */}
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-        {GOLDEN_SCENARIOS.map((s, idx) => (
-          <div
-            key={s.id}
-            className="bg-gray-900/90 border border-gray-800 hover:border-gray-700 rounded-xl p-5 shadow-sm flex flex-col justify-between space-y-4 transition"
-          >
-            <div className="space-y-2">
-              <div className="flex items-center justify-between">
-                <span className="text-xs font-mono text-gray-400">Scenario #{idx + 1}</span>
-                <span className={`px-2 py-0.5 rounded text-[11px] font-semibold ${
-                  s.expectedPolicyResult === 'ALLOW'
-                    ? 'bg-emerald-950 text-emerald-400 border border-emerald-800'
-                    : s.expectedPolicyResult === 'ESCALATE'
-                    ? 'bg-amber-950 text-amber-400 border border-amber-800'
-                    : 'bg-red-950 text-red-400 border border-red-800'
-                }`}>
-                  Expected: {s.expectedPolicyResult}
+        {/* Live Execution Visualizer */}
+        {activeResult && activeResult.result && (
+          <div className="bg-slate-900 border border-blue-500/40 rounded-2xl p-6 shadow-2xl space-y-6">
+            <div className="flex items-center justify-between border-b border-slate-800 pb-4">
+              <div>
+                <span className="text-[10px] text-blue-400 font-semibold uppercase tracking-wider">
+                  Live Control Loop Tracer
                 </span>
+                <h3 className="text-base font-bold text-white font-mono mt-0.5">
+                  {activeResult.scenario || activeResult.result.case.id}
+                </h3>
               </div>
-
-              <h3 className="text-base font-semibold text-white">{s.name}</h3>
-              <p className="text-xs text-gray-400 leading-relaxed">{s.description}</p>
-
-              <div className="pt-2 flex flex-wrap gap-2 text-[11px] font-mono">
-                <span className="bg-gray-950 text-amber-300 px-2 py-0.5 rounded border border-gray-800">
-                  {s.caseData.failure_code}
-                </span>
-                <span className="bg-gray-950 text-gray-300 px-2 py-0.5 rounded border border-gray-800">
-                  ₹{(s.caseData.amount / 100).toFixed(2)}
-                </span>
-                <span className="bg-gray-950 text-blue-400 px-2 py-0.5 rounded border border-gray-800">
-                  Action: {s.expectedAction}
-                </span>
-              </div>
+              <Link
+                href={`/cases/${activeResult.result.case.id}`}
+                className="px-3.5 py-1.5 bg-blue-600 hover:bg-blue-500 text-white rounded-lg text-xs font-semibold transition"
+              >
+                Inspect Full Journey →
+              </Link>
             </div>
 
-            <button
-              onClick={() => runScenario(s.id)}
-              disabled={runningScenario === s.id}
-              className="w-full mt-3 px-4 py-2 bg-gray-800 hover:bg-gray-700 text-blue-400 hover:text-white rounded-lg text-xs font-semibold border border-gray-700 transition flex items-center justify-center gap-2"
-            >
-              {runningScenario === s.id ? (
-                <>
-                  <RefreshCw className="w-3.5 h-3.5 animate-spin" />
-                  Executing Closed Loop...
-                </>
-              ) : (
-                <>
-                  <PlayCircle className="w-3.5 h-3.5" />
-                  Execute Scenario
-                </>
-              )}
-            </button>
+            {/* 4-Step Pipeline Visualizer */}
+            <div className="grid grid-cols-1 md:grid-cols-4 gap-4 text-xs">
+              <div className="bg-slate-950 p-4 rounded-xl border border-slate-800 space-y-1">
+                <span className="text-[10px] text-slate-400 uppercase font-semibold">1. Failure Ingestion</span>
+                <div className="text-xs font-bold text-white truncate">
+                  {activeResult.result.case.failure_code}
+                </div>
+                <div className="text-[11px] text-slate-400 font-mono">
+                  ₹{(activeResult.result.case.amount / 100).toFixed(2)} • {activeResult.result.case.payment_method}
+                </div>
+              </div>
+
+              <div className="bg-slate-950 p-4 rounded-xl border border-slate-800 space-y-1">
+                <span className="text-[10px] text-purple-400 uppercase font-semibold">2. AI Diagnosis</span>
+                <div className="text-xs font-bold text-purple-300 truncate">
+                  {activeResult.result.decision?.recommended_action || 'N/A'}
+                </div>
+                <div className="text-[11px] text-slate-400">
+                  Confidence: {activeResult.result.decision ? `${(activeResult.result.decision.confidence * 100).toFixed(0)}%` : 'N/A'}
+                </div>
+              </div>
+
+              <div className="bg-slate-950 p-4 rounded-xl border border-slate-800 space-y-1">
+                <span className="text-[10px] text-amber-400 uppercase font-semibold">3. Deterministic Policy</span>
+                <div className="text-xs font-bold truncate">
+                  {activeResult.result.policyCheck?.allowed ? (
+                    <span className="text-emerald-400">✓ ALLOWED</span>
+                  ) : activeResult.result.policyCheck?.policy_result === 'ESCALATE' ? (
+                    <span className="text-purple-400">⚡ ESCALATED</span>
+                  ) : (
+                    <span className="text-rose-400">✗ BLOCKED</span>
+                  )}
+                </div>
+                <div className="text-[11px] text-slate-400 truncate">
+                  {activeResult.result.policyCheck?.reasons?.[0] || 'Guardrails checked'}
+                </div>
+              </div>
+
+              <div className="bg-slate-950 p-4 rounded-xl border border-slate-800 space-y-1">
+                <span className="text-[10px] text-emerald-400 uppercase font-semibold">4. Control Outcome</span>
+                <div className="text-xs font-bold text-emerald-400 truncate">
+                  {activeResult.result.transitionedTo}
+                </div>
+                <div className="text-[11px] text-slate-400 truncate">
+                  {activeResult.result.message}
+                </div>
+              </div>
+            </div>
           </div>
-        ))}
+        )}
+
+        {/* Remaining 8 Golden Fixtures */}
+        <div>
+          <h2 className="text-base font-bold text-white mb-4">Complete 10-Scenario Golden Fixture Matrix</h2>
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+            {GOLDEN_SCENARIOS.map((s, idx) => (
+              <div
+                key={s.id}
+                className="bg-slate-900 border border-slate-800 rounded-xl p-4 flex flex-col justify-between hover:border-slate-700 transition"
+              >
+                <div>
+                  <div className="flex items-center justify-between text-[11px] text-slate-400 mb-1">
+                    <span>Fixture #{idx + 1}</span>
+                    <span className="font-mono">₹{(s.caseData.amount / 100).toFixed(0)}</span>
+                  </div>
+                  <h4 className="text-xs font-bold text-slate-200 mb-1">{s.name}</h4>
+                  <p className="text-[11px] text-slate-400 mb-3">{s.description}</p>
+                </div>
+
+                <button
+                  onClick={() => runScenario(s.id)}
+                  disabled={runningScenario === s.id}
+                  className="w-full py-1.5 bg-slate-800 hover:bg-slate-700 disabled:opacity-50 text-slate-200 rounded-lg text-xs font-medium transition"
+                >
+                  {runningScenario === s.id ? 'Running...' : 'Run Scenario'}
+                </button>
+              </div>
+            ))}
+          </div>
+        </div>
+
       </div>
     </div>
   );

@@ -1,4 +1,4 @@
-import { ApprovedAction, PaymentMethod, ConsentStatus } from '../domain/types';
+import { ApprovedAction, PaymentMethod, ConsentStatus, CustomerContext } from '../domain/types';
 
 export type LatentOutageType =
   | 'TRANSIENT_GATEWAY'
@@ -29,15 +29,7 @@ export interface SimulatedObservableCase {
   failure_code: string;
   failure_description: string;
   payment_method: PaymentMethod;
-  customer_context: {
-    customer_id: string;
-    email: string;
-    contact: string;
-    historical_success_rate: number;
-    total_prior_transactions: number;
-    prior_failed_transactions: number;
-    lifetime_value: number;
-  };
+  customer_context: CustomerContext;
   attempt_count: number;
   consent_status: ConsentStatus;
   _hidden_latent: HiddenLatentState; // Kept isolated from agent context
@@ -64,8 +56,9 @@ export class LatentEngine {
     let isHardDeclineRetry = false;
 
     // Hard decline violation check
+    const isRetryAction = action === 'RETRY' || action === 'RETRY_NOW' || action === 'RETRY_LATER';
     if (
-      action === 'RETRY' &&
+      isRetryAction &&
       (latent.outage_type === 'EXPIRED_INSTRUMENT' || latent.outage_type === 'STOLEN_OR_BLOCKED')
     ) {
       isHardDeclineRetry = true;
@@ -80,6 +73,8 @@ export class LatentEngine {
 
     switch (action) {
       case 'RETRY':
+      case 'RETRY_NOW':
+      case 'RETRY_LATER':
         if (latent.outage_type === 'TRANSIENT_GATEWAY' && latent.customer_intent !== 'CHURNED') {
           recovered = true;
         } else if (latent.outage_type === 'AUTH_DROPOUT' && latent.customer_intent === 'HIGH') {
@@ -89,6 +84,7 @@ export class LatentEngine {
         }
         break;
 
+      case 'SEND_RECOVERY_LINK':
       case 'CREATE_OR_REUSE_PAYMENT_LINK':
         if (
           (latent.outage_type === 'AUTH_DROPOUT' || latent.outage_type === 'CUSTOMER_ABORT') &&
@@ -104,6 +100,7 @@ export class LatentEngine {
         }
         break;
 
+      case 'OFFER_ALTERNATE_METHOD':
       case 'OFFER_ALTERNATE_PAYMENT_METHOD':
         if (
           latent.alternate_method_available &&

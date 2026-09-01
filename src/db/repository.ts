@@ -316,9 +316,9 @@ export class Repository {
       .prepare(
         `INSERT INTO decisions (
           id, case_id, model_provider, model_version, prompt_version,
-          diagnosis, failure_category, recoverability, evidence, recommended_action, confidence,
+          diagnosis, failure_category, recoverability, expected_recovery_value, evidence, recommended_action, timing, confidence,
           reason, customer_friction, expected_value, rationale, created_at
-        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
       )
       .run(
         d.id,
@@ -329,8 +329,10 @@ export class Repository {
         d.diagnosis,
         d.failure_category || 'TRANSIENT',
         d.recoverability ?? 0.5,
+        d.expected_recovery_value ?? 0,
         JSON.stringify(d.evidence || []),
         d.recommended_action,
+        d.timing || 'IMMEDIATE',
         d.confidence,
         d.reason || d.rationale || '',
         d.customer_friction || 'LOW',
@@ -354,8 +356,10 @@ export class Repository {
       diagnosis: r.diagnosis,
       failure_category: r.failure_category || 'TRANSIENT',
       recoverability: r.recoverability ?? 0.5,
+      expected_recovery_value: r.expected_recovery_value ?? 0,
       evidence: JSON.parse(r.evidence || '[]'),
       recommended_action: r.recommended_action as ApprovedAction,
+      timing: r.timing || 'IMMEDIATE',
       confidence: r.confidence,
       reason: r.reason || r.rationale || '',
       customer_friction: (r.customer_friction || 'LOW') as CustomerFriction,
@@ -379,8 +383,10 @@ export class Repository {
       diagnosis: row.diagnosis,
       failure_category: row.failure_category || 'TRANSIENT',
       recoverability: row.recoverability ?? 0.5,
+      expected_recovery_value: row.expected_recovery_value ?? 0,
       evidence: JSON.parse(row.evidence || '[]'),
       recommended_action: row.recommended_action as ApprovedAction,
+      timing: row.timing || 'IMMEDIATE',
       confidence: row.confidence,
       reason: row.reason || row.rationale || '',
       customer_friction: (row.customer_friction || 'LOW') as CustomerFriction,
@@ -583,5 +589,25 @@ export class Repository {
       ...row,
       results: JSON.parse(row.results_json),
     };
+  }
+
+  // ==================== MERCHANT SETTINGS ====================
+
+  getMerchantSettings(merchantId: string = 'merchant_default'): any | null {
+    const row = this.db
+      .prepare('SELECT * FROM merchant_settings WHERE merchant_id = ?')
+      .get(merchantId) as any;
+    if (!row) return null;
+    return JSON.parse(row.settings_json);
+  }
+
+  saveMerchantSettings(merchantId: string, settings: any): void {
+    this.db
+      .prepare(
+        `INSERT INTO merchant_settings (merchant_id, settings_json, updated_at)
+         VALUES (?, ?, ?)
+         ON CONFLICT(merchant_id) DO UPDATE SET settings_json = excluded.settings_json, updated_at = excluded.updated_at`
+      )
+      .run(merchantId, JSON.stringify(settings), new Date().toISOString());
   }
 }

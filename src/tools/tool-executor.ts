@@ -93,20 +93,11 @@ export class ToolExecutor {
     try {
       switch (action) {
         case 'RETRY':
+        case 'RETRY_NOW':
+        case 'RETRY_LATER':
           result = await executeRetryPayment(c, this.paymentProvider);
           break;
         case 'SEND_RECOVERY_LINK':
-          result = await executeSendRecoveryLink(c, this.paymentProvider);
-          if (result.data.short_url) {
-            c.recovery_url = result.data.short_url;
-          }
-          if (result.data.payment_link_id) {
-            c.payment_link_id = result.data.payment_link_id;
-          }
-          if (this.repository && typeof this.repository.updateCase === 'function') {
-            this.repository.updateCase(c);
-          }
-          break;
         case 'CREATE_OR_REUSE_PAYMENT_LINK':
           result = await executeCreateOrReusePaymentLink(c, this.paymentProvider);
           if (result.data.short_url) {
@@ -119,6 +110,7 @@ export class ToolExecutor {
             this.repository.updateCase(c);
           }
           break;
+        case 'OFFER_ALTERNATE_METHOD':
         case 'OFFER_ALTERNATE_PAYMENT_METHOD':
           result = await executeOfferAlternatePaymentMethod(c, this.paymentProvider);
           if (result.data.short_url) {

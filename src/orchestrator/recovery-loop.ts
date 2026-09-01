@@ -36,6 +36,16 @@ export class RecoveryControlLoop {
     this.policyEngine = new PolicyEngine(policyConfig);
   }
 
+  private getEffectivePolicy(): MerchantPolicyConfig {
+    if (this.repository && typeof this.repository.getMerchantSettings === 'function') {
+      const saved = this.repository.getMerchantSettings('merchant_default');
+      if (saved) {
+        return { ...this.policyConfig, ...saved };
+      }
+    }
+    return this.policyConfig;
+  }
+
   /**
    * Main entry point when a payment failure event is ingested.
    */
@@ -53,6 +63,8 @@ export class RecoveryControlLoop {
     consentStatus?: 'CONSENTED' | 'OPTED_OUT' | 'UNKNOWN';
   }): Promise<RecoveryLoopResult> {
     const now = new Date().toISOString();
+    const effectivePolicy = this.getEffectivePolicy();
+    const policyEngine = new PolicyEngine(effectivePolicy);
 
     // 1. Check if case already exists
     let c = this.repository.getCaseByPaymentId(input.paymentId);
@@ -78,7 +90,7 @@ export class RecoveryControlLoop {
         recoverability_score: 0.5,
         expected_recovery_value: Math.round(input.amount * 0.5),
         consent_status: input.consentStatus || 'CONSENTED',
-        policy_version: this.policyConfig.policy_version,
+        policy_version: effectivePolicy.policy_version,
         created_at: now,
         updated_at: now,
       };
@@ -119,7 +131,7 @@ export class RecoveryControlLoop {
     c.status = 'ANALYZING';
     this.repository.updateCase(c);
 
-    const context = ContextBuilder.buildContext(c, this.policyConfig);
+    const context = ContextBuilder.buildContext(c, effectivePolicy);
     c.recoverability_score = context.recoverability_score;
     c.expected_recovery_value = context.expected_recovery_value;
     this.repository.updateCase(c);
@@ -163,7 +175,7 @@ export class RecoveryControlLoop {
     c.status = 'POLICY_CHECK';
     this.repository.updateCase(c);
 
-    const policyCheck = this.policyEngine.evaluate(c, decision);
+    const policyCheck = policyEngine.evaluate(c, decision);
     this.repository.createPolicyCheck(policyCheck);
 
     this.repository.createAuditEvent({

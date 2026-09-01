@@ -32,12 +32,21 @@ class Mulberry32 {
   }
 }
 
+export type BenchmarkArchetype =
+  | 'HIGH_VALUE_TRANSIENT'
+  | 'REPEATED_LOW_VALUE'
+  | 'EXPIRED_PAYMENT_METHOD'
+  | 'PREVIOUSLY_RECOVERABLE'
+  | 'SUSPICIOUS_HIGH_RISK'
+  | 'RECOVERY_SHOULD_STOP';
+
 export class DatasetGenerator {
   /**
-   * Generates a seeded synthetic benchmark dataset of N cases.
+   * Generates a seeded synthetic benchmark dataset of N cases (Default: 5,000 cases).
+   * Incorporates the 6 realistic payment recovery archetypes.
    */
   static generateSeededDataset(
-    count: number = 1200,
+    count: number = 5000,
     seed: number = 42
   ): {
     trainCases: SimulatedObservableCase[];
@@ -46,109 +55,120 @@ export class DatasetGenerator {
     const rng = new Mulberry32(seed);
     const allCases: SimulatedObservableCase[] = [];
 
-    const failureArchetypes: Array<{
-      code: string;
-      desc: string;
-      method: PaymentMethod;
-      outage: LatentOutageType;
-      weight: number;
-    }> = [
-      {
-        code: 'GATEWAY_ERROR',
-        desc: 'Gateway timeout during authorization with issuer',
-        method: 'card',
-        outage: 'TRANSIENT_GATEWAY',
-        weight: 25,
-      },
-      {
-        code: 'BANK_SERVER_DOWN',
-        desc: 'Issuing bank node unresponsive for netbanking verification',
-        method: 'netbanking',
-        outage: 'TRANSIENT_GATEWAY',
-        weight: 15,
-      },
-      {
-        code: 'BAD_REQUEST_ERROR',
-        desc: 'Card expiration date expired or invalid',
-        method: 'card',
-        outage: 'EXPIRED_INSTRUMENT',
-        weight: 10,
-      },
-      {
-        code: 'INSUFFICIENT_FUNDS',
-        desc: 'Declined: insufficient funds in customer account',
-        method: 'upi',
-        outage: 'BALANCE_DEFICIT',
-        weight: 15,
-      },
-      {
-        code: 'AUTH_TIMEOUT',
-        desc: '3D Secure OTP verification window timed out by user',
-        method: 'card',
-        outage: 'AUTH_DROPOUT',
-        weight: 15,
-      },
-      {
-        code: 'PAYMENT_CANCELLED_BY_USER',
-        desc: 'Customer declined/cancelled checkout flow',
-        method: 'upi',
-        outage: 'CUSTOMER_ABORT',
-        weight: 10,
-      },
-      {
-        code: 'CARD_BLOCKED',
-        desc: 'Card blocked by issuing bank fraud monitoring',
-        method: 'card',
-        outage: 'STOLEN_OR_BLOCKED',
-        weight: 5,
-      },
-      {
-        code: 'UNKNOWN_GATEWAY_CODE',
-        desc: 'Undocumented vendor rejection response received',
-        method: 'wallet',
-        outage: 'PERSISTENT_OUTAGE',
-        weight: 5,
-      },
+    const archetypes: BenchmarkArchetype[] = [
+      'HIGH_VALUE_TRANSIENT',
+      'HIGH_VALUE_TRANSIENT',
+      'REPEATED_LOW_VALUE',
+      'REPEATED_LOW_VALUE',
+      'REPEATED_LOW_VALUE',
+      'EXPIRED_PAYMENT_METHOD',
+      'EXPIRED_PAYMENT_METHOD',
+      'PREVIOUSLY_RECOVERABLE',
+      'PREVIOUSLY_RECOVERABLE',
+      'PREVIOUSLY_RECOVERABLE',
+      'SUSPICIOUS_HIGH_RISK',
+      'RECOVERY_SHOULD_STOP',
     ];
 
-    const expandedArchetypes: typeof failureArchetypes = [];
-    for (const item of failureArchetypes) {
-      for (let i = 0; i < item.weight; i++) {
-        expandedArchetypes.push(item);
-      }
-    }
-
-    const intentOptions: LatentCustomerIntent[] = ['HIGH', 'HIGH', 'MEDIUM', 'MEDIUM', 'LOW', 'CHURNED'];
-
     for (let i = 1; i <= count; i++) {
-      const arch = rng.choice(expandedArchetypes);
-      const intent = rng.choice(intentOptions);
+      const archetype = rng.choice(archetypes);
 
-      // Amount distribution: majority regular (500 INR to 5,000 INR), some high value (50,000 to 1,50,000 INR)
-      const isHighValue = rng.next() < 0.08;
-      const amount = isHighValue
-        ? rng.nextInt(5000000, 15000000) // 50,000 - 150,000 INR
-        : rng.nextInt(39900, 499900);     // 399 - 4,999 INR
+      let code = 'GATEWAY_ERROR';
+      let desc = 'Temporary gateway timeout during bank settlement';
+      let method: PaymentMethod = 'card';
+      let outage: LatentOutageType = 'TRANSIENT_GATEWAY';
+      let intent: LatentCustomerIntent = 'HIGH';
+      let amount = rng.nextInt(99900, 499900); // Default ₹999 - ₹4,999
+      let consentStatus: ConsentStatus = 'CONSENTED';
+      let attemptCount = 1;
+      let priorTx = rng.nextInt(2, 10);
+      let successRate = 0.85;
 
-      const optOut = rng.next() < 0.03; // 3% opt-out
-      const consentStatus: ConsentStatus = optOut ? 'OPTED_OUT' : 'CONSENTED';
+      switch (archetype) {
+        case 'HIGH_VALUE_TRANSIENT':
+          code = 'GATEWAY_ERROR';
+          desc = 'High-ticket order gateway timeout at bank node';
+          method = rng.choice(['netbanking', 'card', 'upi']);
+          outage = 'TRANSIENT_GATEWAY';
+          intent = 'HIGH';
+          amount = rng.nextInt(5000000, 15000000); // ₹50,000 - ₹1,50,000
+          priorTx = rng.nextInt(5, 25);
+          successRate = 0.95;
+          attemptCount = 1;
+          break;
 
-      const priorTx = rng.nextInt(1, 20);
-      const successRate = Number((0.4 + rng.next() * 0.55).toFixed(2));
-      const priorFailed = Math.round(priorTx * (1 - successRate));
+        case 'REPEATED_LOW_VALUE':
+          code = 'INSUFFICIENT_FUNDS';
+          desc = 'Account balance deficit on micro-transaction';
+          method = 'upi';
+          outage = 'BALANCE_DEFICIT';
+          intent = 'MEDIUM';
+          amount = rng.nextInt(19900, 99900); // ₹199 - ₹999
+          priorTx = rng.nextInt(1, 4);
+          successRate = 0.50;
+          attemptCount = rng.choice([1, 2]);
+          break;
 
-      const caseId = `case_seed_${String(i).padStart(4, '0')}`;
-      const paymentId = `pay_seed_${String(i).padStart(4, '0')}`;
-      const orderId = `order_seed_${String(i).padStart(4, '0')}`;
+        case 'EXPIRED_PAYMENT_METHOD':
+          code = 'EXPIRED_CARD';
+          desc = 'Card instrument expired; recurring token invalid';
+          method = 'card';
+          outage = 'EXPIRED_INSTRUMENT';
+          intent = 'HIGH';
+          amount = rng.nextInt(150000, 800000); // ₹1,500 - ₹8,000
+          priorTx = rng.nextInt(3, 12);
+          successRate = 0.80;
+          attemptCount = 1;
+          break;
+
+        case 'PREVIOUSLY_RECOVERABLE':
+          code = 'AUTH_TIMEOUT';
+          desc = '3DS OTP screen abandoned before user submit';
+          method = 'card';
+          outage = 'AUTH_DROPOUT';
+          intent = 'HIGH';
+          amount = rng.nextInt(100000, 1200000); // ₹1,000 - ₹12,000
+          priorTx = rng.nextInt(2, 8);
+          successRate = 0.90;
+          attemptCount = 1;
+          break;
+
+        case 'SUSPICIOUS_HIGH_RISK':
+          code = 'CARD_BLOCKED';
+          desc = 'Declined by issuer risk scoring engine';
+          method = 'card';
+          outage = 'STOLEN_OR_BLOCKED';
+          intent = 'LOW';
+          amount = rng.nextInt(2000000, 8000000); // ₹20,000 - ₹80,000
+          priorTx = 0;
+          successRate = 0.0;
+          attemptCount = 1;
+          break;
+
+        case 'RECOVERY_SHOULD_STOP':
+          code = 'GATEWAY_ERROR';
+          desc = 'Customer opted out or exhausted max interventions';
+          method = 'upi';
+          outage = 'CUSTOMER_ABORT';
+          intent = 'CHURNED';
+          amount = rng.nextInt(50000, 300000); // ₹500 - ₹3,000
+          consentStatus = rng.next() > 0.5 ? 'OPTED_OUT' : 'CONSENTED';
+          attemptCount = consentStatus === 'OPTED_OUT' ? 1 : 3;
+          break;
+      }
+
+      const caseId = `case_seed_${String(i).padStart(5, '0')}`;
+      const paymentId = `pay_seed_${String(i).padStart(5, '0')}`;
+      const orderId = `order_seed_${String(i).padStart(5, '0')}`;
 
       const latent: HiddenLatentState = {
         case_id: caseId,
-        outage_type: arch.outage,
+        outage_type: outage,
         customer_intent: intent,
-        alternate_method_available: rng.next() > 0.2,
-        time_sensitive: rng.next() > 0.5,
+        alternate_method_available: archetype === 'EXPIRED_PAYMENT_METHOD' || archetype === 'REPEATED_LOW_VALUE',
+        time_sensitive: intent === 'HIGH',
         true_recovery_potential:
-          arch.outage === 'TRANSIENT_GATEWAY' ? 0.9 : arch.outage === 'AUTH_DROPOUT' ? 0.75 : 0.3,
+          outage === 'TRANSIENT_GATEWAY' ? 0.92 : outage === 'AUTH_DROPOUT' ? 0.80 : outage === 'BALANCE_DEFICIT' ? 0.65 : 0.15,
       };
 
       const observable: SimulatedObservableCase = {
@@ -157,19 +177,20 @@ export class DatasetGenerator {
         order_id: orderId,
         amount,
         currency: 'INR',
-        failure_code: arch.code,
-        failure_description: arch.desc,
-        payment_method: arch.method,
+        failure_code: code,
+        failure_description: desc,
+        payment_method: method,
         customer_context: {
-          customer_id: `cust_${rng.nextInt(100, 999)}`,
+          customer_id: `cust_${rng.nextInt(1000, 9999)}`,
           email: `customer_${i}@example.com`,
           contact: `+9198${rng.nextInt(10000000, 99999999)}`,
           historical_success_rate: successRate,
           total_prior_transactions: priorTx,
-          prior_failed_transactions: priorFailed,
-          lifetime_value: priorTx * 250000,
+          prior_failed_transactions: Math.round(priorTx * (1 - successRate)),
+          lifetime_value: priorTx * amount,
+          is_returning_customer: priorTx > 1,
         },
-        attempt_count: rng.choice([1, 1, 1, 2, 2, 3]),
+        attempt_count: attemptCount,
         consent_status: consentStatus,
         _hidden_latent: latent,
       };

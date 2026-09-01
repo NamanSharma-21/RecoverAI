@@ -182,6 +182,12 @@ export default function DashboardPage() {
             >
               Benchmark Suite
             </Link>
+            <Link
+              href="/settings"
+              className="px-4 py-2 bg-slate-900 hover:bg-slate-800 border border-slate-800 rounded-lg text-xs font-semibold text-slate-300 transition"
+            >
+              Policy Settings
+            </Link>
             <button
               onClick={() => handleCreateTestRecovery(1200000, 'GATEWAY_TIMEOUT')}
               disabled={creatingTest}

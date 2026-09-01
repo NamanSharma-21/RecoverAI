@@ -4,22 +4,29 @@
  */
 
 export type ApprovedAction =
-  | 'RETRY'
-  | 'SEND_RECOVERY_LINK'
-  | 'CREATE_OR_REUSE_PAYMENT_LINK' // Alias for backward compatibility
-  | 'OFFER_ALTERNATE_PAYMENT_METHOD' // Alias for backward compatibility
+  | 'RETRY_NOW'
+  | 'RETRY_LATER'
+  | 'CREATE_OR_REUSE_PAYMENT_LINK'
+  | 'OFFER_ALTERNATE_METHOD'
   | 'WAIT'
   | 'ESCALATE'
-  | 'STOP';
+  | 'STOP'
+  // Backward compatibility aliases:
+  | 'RETRY'
+  | 'SEND_RECOVERY_LINK'
+  | 'OFFER_ALTERNATE_PAYMENT_METHOD';
 
 export const APPROVED_ACTIONS: ApprovedAction[] = [
-  'RETRY',
-  'SEND_RECOVERY_LINK',
+  'RETRY_NOW',
+  'RETRY_LATER',
   'CREATE_OR_REUSE_PAYMENT_LINK',
-  'OFFER_ALTERNATE_PAYMENT_METHOD',
+  'OFFER_ALTERNATE_METHOD',
   'WAIT',
   'ESCALATE',
   'STOP',
+  'RETRY',
+  'SEND_RECOVERY_LINK',
+  'OFFER_ALTERNATE_PAYMENT_METHOD',
 ];
 
 export type CaseStatus =
@@ -64,6 +71,7 @@ export interface CustomerContext {
   total_prior_transactions?: number;
   prior_failed_transactions?: number;
   lifetime_value?: number;
+  is_returning_customer?: boolean;
 }
 
 export interface PaymentFailureContext {
@@ -110,11 +118,13 @@ export interface Decision {
   diagnosis: string;
   failure_category: string;
   recoverability: number; // 0.0 - 1.0
+  expected_recovery_value: number;
   recommended_action: ApprovedAction;
+  timing: string;
   confidence: number; // 0.0 - 1.0
   reason: string;
   customer_friction: CustomerFriction;
-  expected_value: number;
+  expected_value: number; // in smallest currency unit
   evidence: string[];
   rationale: string;
   created_at: string;
@@ -188,6 +198,8 @@ export interface MerchantPolicyConfig {
   max_retry_attempts: number; // Max total interventions per case (default: 2)
   max_interventions_per_case: number; // Default: 2
   autonomous_amount_threshold: number; // For compatibility (= human_approval_above_inr)
+  recovery_cooldown_minutes: number; // Default: 15 mins between retries
+  max_contact_frequency_hours: number; // Max contact frequency (e.g. 12 hrs)
   policy_version: string;
   require_human_review_above_amount: number;
   min_confidence_for_autonomous_action: number;
@@ -202,10 +214,23 @@ export const DEFAULT_MERCHANT_POLICY: MerchantPolicyConfig = {
   max_retry_attempts: 2,
   max_interventions_per_case: 2,
   autonomous_amount_threshold: 2500000, // ₹25,000
-  policy_version: '2.0.0',
+  recovery_cooldown_minutes: 15,
+  max_contact_frequency_hours: 12,
+  policy_version: '2.1.0',
   require_human_review_above_amount: 2500000,
   min_confidence_for_autonomous_action: 0.65,
-  allowed_actions: ['RETRY', 'SEND_RECOVERY_LINK', 'CREATE_OR_REUSE_PAYMENT_LINK', 'OFFER_ALTERNATE_PAYMENT_METHOD', 'ESCALATE', 'STOP'],
+  allowed_actions: [
+    'RETRY_NOW',
+    'RETRY_LATER',
+    'CREATE_OR_REUSE_PAYMENT_LINK',
+    'OFFER_ALTERNATE_METHOD',
+    'WAIT',
+    'ESCALATE',
+    'STOP',
+    'RETRY',
+    'SEND_RECOVERY_LINK',
+    'OFFER_ALTERNATE_PAYMENT_METHOD',
+  ],
   prohibited_failure_codes_for_retry: [
     'BAD_REQUEST_ERROR',
     'EXPIRED_CARD',
@@ -214,6 +239,6 @@ export const DEFAULT_MERCHANT_POLICY: MerchantPolicyConfig = {
     'CARD_BLOCKED',
     'ACCOUNT_CLOSED',
     'TRANSACTION_NOT_ALLOWED',
-    'HARD_DECLINE'
+    'HARD_DECLINE',
   ],
 };
