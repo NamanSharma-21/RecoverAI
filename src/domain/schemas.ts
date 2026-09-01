@@ -3,6 +3,7 @@ import { APPROVED_ACTIONS } from './types';
 
 export const ApprovedActionSchema = z.enum([
   'RETRY',
+  'SEND_RECOVERY_LINK',
   'CREATE_OR_REUSE_PAYMENT_LINK',
   'OFFER_ALTERNATE_PAYMENT_METHOD',
   'WAIT',
@@ -11,6 +12,20 @@ export const ApprovedActionSchema = z.enum([
 ]);
 
 export const CaseStatusSchema = z.enum([
+  'FAILED',
+  'ANALYZING',
+  'DECISION_READY',
+  'POLICY_CHECK',
+  'ACTION_PENDING',
+  'ACTION_EXECUTED',
+  'OUTCOME_MONITORED',
+  'RECOVERED',
+  'STOPPED',
+  'ESCALATED',
+  'HUMAN_REVIEW',
+  'EXPIRED',
+  'FAILED_RECOVERY',
+  // Legacy aliases:
   'EVENT_RECEIVED',
   'VERIFIED',
   'DEDUPLICATED',
@@ -19,13 +34,6 @@ export const CaseStatusSchema = z.enum([
   'PRIORITIZED',
   'ACTION_SELECTED',
   'POLICY_CHECKED',
-  'HUMAN_REVIEW',
-  'ACTION_EXECUTED',
-  'OUTCOME_MONITORED',
-  'RECOVERED',
-  'FAILED',
-  'STOPPED',
-  'ESCALATED',
 ]);
 
 export const ConsentStatusSchema = z.enum(['CONSENTED', 'OPTED_OUT', 'UNKNOWN']);
@@ -56,15 +64,19 @@ export const PaymentFailureContextSchema = z.object({
 
 /**
  * Strict schema for the LLM structured JSON decision output.
- * Any model output that violates this schema is rejected by the application boundary.
+ * Matches Product Definition requirement.
  */
 export const AIDecisionOutputSchema = z.object({
   diagnosis: z.string().min(3, 'Diagnosis must be descriptive'),
-  evidence: z.array(z.string()).min(1, 'At least one piece of evidence is required'),
+  failure_category: z.string().default('TRANSIENT'),
+  recoverability: z.number().min(0).max(1).default(0.7),
   recommended_action: ApprovedActionSchema,
   confidence: z.number().min(0).max(1, 'Confidence must be between 0.0 and 1.0'),
-  expected_recovery_value: z.number().nonnegative('Expected recovery value must be non-negative'),
-  rationale: z.string().min(5, 'Rationale must be descriptive'),
+  reason: z.string().min(3, 'Reason must be provided'),
+  customer_friction: z.enum(['LOW', 'MEDIUM', 'HIGH']).default('LOW'),
+  expected_recovery_value: z.number().nonnegative('Expected recovery value must be non-negative').optional(),
+  evidence: z.array(z.string()).default([]),
+  rationale: z.string().optional(),
 });
 
 export type AIDecisionOutput = z.infer<typeof AIDecisionOutputSchema>;

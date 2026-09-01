@@ -66,6 +66,7 @@ export class RecoveryControlLoop {
         payment_id: input.paymentId,
         order_id: input.orderId || null,
         payment_link_id: input.paymentLinkId || null,
+        recovery_url: null,
         amount: input.amount,
         currency: input.currency || 'INR',
         failure_code: input.failureCode || 'GATEWAY_ERROR',
@@ -73,7 +74,7 @@ export class RecoveryControlLoop {
         payment_method: input.paymentMethod || 'card',
         customer_context: input.customerContext || {},
         attempt_count: 0,
-        status: 'RECOVERY_CASE_CREATED',
+        status: 'FAILED',
         recoverability_score: 0.5,
         expected_recovery_value: Math.round(input.amount * 0.5),
         consent_status: input.consentStatus || 'CONSENTED',
@@ -90,12 +91,12 @@ export class RecoveryControlLoop {
         event_type: 'CASE_CREATED',
         actor: 'SYSTEM',
         source: 'RecoveryControlLoop.handlePaymentFailure',
-        metadata: { amount: c.amount, failure_code: c.failure_code },
+        metadata: { amount: c.amount, failure_code: c.failure_code, payment_method: c.payment_method },
         timestamp: now,
       });
     }
 
-    // Guardrail: If case is already RECOVERED, stop immediately
+    // Invariant: If case is already RECOVERED, stop immediately
     if (c.status === 'RECOVERED') {
       this.repository.createAuditEvent({
         id: `aud_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`,
@@ -113,9 +114,9 @@ export class RecoveryControlLoop {
       };
     }
 
-    // 2. Assemble sanitized context
-    validateTransition(c.id, c.status, 'DIAGNOSED');
-    c.status = 'DIAGNOSED';
+    // 2. Assemble context & diagnosis
+    validateTransition(c.id, c.status, 'ANALYZING');
+    c.status = 'ANALYZING';
     this.repository.updateCase(c);
 
     const context = ContextBuilder.buildContext(c, this.policyConfig);
@@ -134,8 +135,8 @@ export class RecoveryControlLoop {
     });
 
     // 3. AI structured decision
-    validateTransition(c.id, c.status, 'ACTION_SELECTED');
-    c.status = 'ACTION_SELECTED';
+    validateTransition(c.id, c.status, 'DECISION_READY');
+    c.status = 'DECISION_READY';
     this.repository.updateCase(c);
 
     const decision = await this.decisionService.decide(context);
@@ -151,13 +152,15 @@ export class RecoveryControlLoop {
         diagnosis: decision.diagnosis,
         recommended_action: decision.recommended_action,
         confidence: decision.confidence,
+        reason: decision.reason,
+        customer_friction: decision.customer_friction,
       },
       timestamp: new Date().toISOString(),
     });
 
     // 4. Deterministic Policy Check
-    validateTransition(c.id, c.status, 'POLICY_CHECKED');
-    c.status = 'POLICY_CHECKED';
+    validateTransition(c.id, c.status, 'POLICY_CHECK');
+    c.status = 'POLICY_CHECK';
     this.repository.updateCase(c);
 
     const policyCheck = this.policyEngine.evaluate(c, decision);
@@ -196,6 +199,10 @@ export class RecoveryControlLoop {
       }
 
       // Execute approved action
+      validateTransition(c.id, c.status, 'ACTION_PENDING');
+      c.status = 'ACTION_PENDING';
+      this.repository.updateCase(c);
+
       validateTransition(c.id, c.status, 'ACTION_EXECUTED');
       c.status = 'ACTION_EXECUTED';
       c.attempt_count += 1;
@@ -220,7 +227,6 @@ export class RecoveryControlLoop {
       c.status = 'HUMAN_REVIEW';
       this.repository.updateCase(c);
 
-      // Execute escalate tool with special allow policy check for logging
       const escalateToolRes = await this.toolExecutor.execute('ESCALATE', c, {
         ...policyCheck,
         allowed: true,
@@ -288,6 +294,9 @@ export class RecoveryControlLoop {
     amount: number;
   }): Promise<{ recovered: boolean; case?: RecoveryCase }> {
     let c = this.repository.getCaseByPaymentId(input.paymentId);
+    if (!c && input.paymentLinkId) {
+      c = this.repository.getCaseByPaymentLinkId(input.paymentLinkId);
+    }
     if (!c && input.orderId) {
       c = this.repository.getCaseByOrderId(input.orderId);
     }
@@ -307,7 +316,7 @@ export class RecoveryControlLoop {
         event_type: 'CASE_RECOVERED',
         actor: 'PAYMENT_GATEWAY',
         source: 'RazorpayWebhook.payment.captured',
-        metadata: { amount: input.amount, payment_id: input.paymentId },
+        metadata: { amount: input.amount, payment_id: input.paymentId, payment_link_id: input.paymentLinkId },
         timestamp: new Date().toISOString(),
       });
 
@@ -350,7 +359,11 @@ export class RecoveryControlLoop {
       const actionToExecute =
         req.action === 'OVERRIDE' && req.override_action
           ? req.override_action
-          : latestDecision?.recommended_action || 'RETRY';
+          : latestDecision?.recommended_action || 'SEND_RECOVERY_LINK';
+
+      validateTransition(c.id, c.status, 'ACTION_PENDING');
+      c.status = 'ACTION_PENDING';
+      this.repository.updateCase(c);
 
       validateTransition(c.id, c.status, 'ACTION_EXECUTED');
       c.status = 'ACTION_EXECUTED';

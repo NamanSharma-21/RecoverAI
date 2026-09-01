@@ -1,14 +1,11 @@
-import {
-  RecoveryCase,
-  PolicyCheck,
-  ToolExecution,
-  ApprovedAction,
-} from '../domain/types';
-import { PaymentProvider } from '../adapters/provider-interface';
 import { Repository } from '../db/repository';
+import { RecoveryCase, ApprovedAction, PolicyCheck } from '../domain/types';
+import { PaymentProvider } from '../adapters/provider-interface';
+import { createPaymentProvider } from '../adapters/razorpay-adapter';
 import {
   ToolResult,
   executeRetryPayment,
+  executeSendRecoveryLink,
   executeCreateOrReusePaymentLink,
   executeOfferAlternatePaymentMethod,
   executeWaitCase,
@@ -17,76 +14,122 @@ import {
 } from './definitions';
 
 export class ToolExecutor {
-  constructor(
-    private provider: PaymentProvider,
-    private repository: Repository
-  ) {}
+  private repository?: Repository;
+  private paymentProvider: PaymentProvider;
+
+  constructor(arg1?: any, arg2?: any) {
+    if (
+      arg1 &&
+      (typeof arg1.getPayment === 'function' ||
+        typeof arg1.retryPayment === 'function' ||
+        typeof arg1.createPaymentLink === 'function')
+    ) {
+      this.paymentProvider = arg1;
+      this.repository = arg2;
+    } else {
+      this.repository = arg1;
+      this.paymentProvider = arg2 || createPaymentProvider();
+    }
+  }
+
+  getPaymentProvider(): PaymentProvider {
+    return this.paymentProvider;
+  }
 
   async execute(
     action: ApprovedAction,
     c: RecoveryCase,
-    policyCheck: PolicyCheck,
-    idempotencyKey?: string
+    policyCheck: PolicyCheck
   ): Promise<ToolResult> {
-    // 1. Mandatory guardrail: Only ALLOW reaches a tool
+    // 1. Invariant: Policy must allow execution
     if (!policyCheck.allowed && policyCheck.policy_result !== 'ALLOW') {
       throw new Error(
-        `Security Guardrail Violation: Cannot execute tool '${action}' because policy check was ${policyCheck.policy_result}. Reasons: ${policyCheck.reasons.join(', ')}`
+        `Security Guardrail Violation: Execution blocked. Policy returned ${policyCheck.policy_result}. Action '${action}' rejected.`
       );
     }
 
-    const key =
-      idempotencyKey ||
-      `idemp_${c.id}_${action}_${c.attempt_count + 1}_${Date.now()}`;
-
-    // 2. Idempotency check: check if already executed
-    const existingExec = this.repository.getToolExecutionByIdempotencyKey(key);
-    if (existingExec) {
-      return {
-        success: existingExec.status === 'SUCCESS',
-        action: existingExec.tool_name,
-        data: existingExec.result,
-        message: 'Idempotent replay of existing tool execution result.',
-      };
+    // 2. Invariant: Idempotency Key check
+    const idempotencyKey = `idemp_${c.id}_${action}_${c.attempt_count}_${Date.now()}`;
+    if (this.repository && typeof this.repository.getToolExecutionByIdempotencyKey === 'function') {
+      const existing = this.repository.getToolExecutionByIdempotencyKey(idempotencyKey);
+      if (existing) {
+        return {
+          success: existing.status === 'SUCCESS',
+          action,
+          data: existing.result,
+          message: 'Idempotent replay: Action was already executed.',
+        };
+      }
     }
 
-    const toolExecutionId = `tool_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
+    // 3. Record pending tool execution
+    const executionId = `tool_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
+    if (this.repository && typeof this.repository.createToolExecution === 'function') {
+      this.repository.createToolExecution({
+        id: executionId,
+        case_id: c.id,
+        decision_id: policyCheck.decision_id,
+        tool_name: action,
+        idempotency_key: idempotencyKey,
+        arguments: { case_id: c.id, payment_id: c.payment_id, amount: c.amount, action },
+        result: {},
+        status: 'PENDING',
+        created_at: new Date().toISOString(),
+      });
 
-    // Record pending execution
-    this.repository.createToolExecution({
-      id: toolExecutionId,
-      case_id: c.id,
-      decision_id: policyCheck.decision_id,
-      tool_name: action,
-      idempotency_key: key,
-      arguments: { action, case_id: c.id, attempt: c.attempt_count + 1 },
-      result: {},
-      status: 'PENDING',
-      created_at: new Date().toISOString(),
-    });
+      this.repository.createAuditEvent({
+        id: `aud_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`,
+        case_id: c.id,
+        event_type: 'TOOL_EXECUTION_ATTEMPTED',
+        actor: 'TOOL',
+        source: `ToolExecutor.${action}`,
+        metadata: { action, attempt: c.attempt_count, idempotency_key: idempotencyKey },
+        timestamp: new Date().toISOString(),
+      });
+    }
 
-    // Record audit event
-    this.repository.createAuditEvent({
-      id: `aud_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`,
-      case_id: c.id,
-      event_type: 'TOOL_EXECUTION_ATTEMPTED',
-      actor: 'TOOL',
-      source: `ToolExecutor.${action}`,
-      metadata: { action, idempotency_key: key, decision_id: policyCheck.decision_id },
-      timestamp: new Date().toISOString(),
-    });
-
+    // 4. Controlled Execution
     let result: ToolResult;
     try {
       switch (action) {
         case 'RETRY':
-          result = await executeRetryPayment(c, this.provider);
+          result = await executeRetryPayment(c, this.paymentProvider);
+          break;
+        case 'SEND_RECOVERY_LINK':
+          result = await executeSendRecoveryLink(c, this.paymentProvider);
+          if (result.data.short_url) {
+            c.recovery_url = result.data.short_url;
+          }
+          if (result.data.payment_link_id) {
+            c.payment_link_id = result.data.payment_link_id;
+          }
+          if (this.repository && typeof this.repository.updateCase === 'function') {
+            this.repository.updateCase(c);
+          }
           break;
         case 'CREATE_OR_REUSE_PAYMENT_LINK':
-          result = await executeCreateOrReusePaymentLink(c, this.provider);
+          result = await executeCreateOrReusePaymentLink(c, this.paymentProvider);
+          if (result.data.short_url) {
+            c.recovery_url = result.data.short_url;
+          }
+          if (result.data.payment_link_id) {
+            c.payment_link_id = result.data.payment_link_id;
+          }
+          if (this.repository && typeof this.repository.updateCase === 'function') {
+            this.repository.updateCase(c);
+          }
           break;
         case 'OFFER_ALTERNATE_PAYMENT_METHOD':
-          result = await executeOfferAlternatePaymentMethod(c, this.provider);
+          result = await executeOfferAlternatePaymentMethod(c, this.paymentProvider);
+          if (result.data.short_url) {
+            c.recovery_url = result.data.short_url;
+          }
+          if (result.data.payment_link_id) {
+            c.payment_link_id = result.data.payment_link_id;
+          }
+          if (this.repository && typeof this.repository.updateCase === 'function') {
+            this.repository.updateCase(c);
+          }
           break;
         case 'WAIT':
           result = await executeWaitCase(c);
@@ -98,41 +141,41 @@ export class ToolExecutor {
           result = await executeEscalateCase(c, policyCheck.reasons.join('; '));
           break;
         default:
-          throw new Error(`Unsupported tool action: ${action}`);
+          throw new Error(`Unknown action: ${action}`);
       }
 
-      this.repository.updateToolExecution(
-        toolExecutionId,
-        result.success ? 'SUCCESS' : 'FAILED',
-        result.data
-      );
+      if (this.repository && typeof this.repository.updateToolExecution === 'function') {
+        this.repository.updateToolExecution(
+          executionId,
+          result.success ? 'SUCCESS' : 'FAILED',
+          result.data
+        );
 
-      this.repository.createAuditEvent({
-        id: `aud_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`,
-        case_id: c.id,
-        event_type: result.success ? 'TOOL_EXECUTION_COMPLETED' : 'TOOL_EXECUTION_FAILED',
-        actor: 'TOOL',
-        source: `ToolExecutor.${action}`,
-        metadata: { action, result: result.data, success: result.success },
-        timestamp: new Date().toISOString(),
-      });
+        this.repository.createAuditEvent({
+          id: `aud_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`,
+          case_id: c.id,
+          event_type: result.success ? 'TOOL_EXECUTION_COMPLETED' : 'TOOL_EXECUTION_FAILED',
+          actor: 'TOOL',
+          source: `ToolExecutor.${action}`,
+          metadata: { success: result.success, message: result.message, data: result.data },
+          timestamp: new Date().toISOString(),
+        });
+      }
 
       return result;
     } catch (err: any) {
-      this.repository.updateToolExecution(toolExecutionId, 'FAILED', {
-        error: err.message,
-      });
-
-      this.repository.createAuditEvent({
-        id: `aud_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`,
-        case_id: c.id,
-        event_type: 'TOOL_EXECUTION_FAILED',
-        actor: 'TOOL',
-        source: `ToolExecutor.${action}`,
-        metadata: { action, error: err.message },
-        timestamp: new Date().toISOString(),
-      });
-
+      if (this.repository && typeof this.repository.updateToolExecution === 'function') {
+        this.repository.updateToolExecution(executionId, 'FAILED', { error: err.message });
+        this.repository.createAuditEvent({
+          id: `aud_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`,
+          case_id: c.id,
+          event_type: 'TOOL_EXECUTION_FAILED',
+          actor: 'TOOL',
+          source: `ToolExecutor.${action}`,
+          metadata: { error: err.message },
+          timestamp: new Date().toISOString(),
+        });
+      }
       throw err;
     }
   }

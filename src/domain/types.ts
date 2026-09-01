@@ -1,18 +1,20 @@
 /**
  * RecoverAI - Core Domain Types
- * Authoritative definitions matching PRD and Technical Design Document specifications.
+ * Authoritative definitions matching PRD, Technical Design Document, and Revenue Recovery Loop specifications.
  */
 
 export type ApprovedAction =
   | 'RETRY'
-  | 'CREATE_OR_REUSE_PAYMENT_LINK'
-  | 'OFFER_ALTERNATE_PAYMENT_METHOD'
+  | 'SEND_RECOVERY_LINK'
+  | 'CREATE_OR_REUSE_PAYMENT_LINK' // Alias for backward compatibility
+  | 'OFFER_ALTERNATE_PAYMENT_METHOD' // Alias for backward compatibility
   | 'WAIT'
   | 'ESCALATE'
   | 'STOP';
 
 export const APPROVED_ACTIONS: ApprovedAction[] = [
   'RETRY',
+  'SEND_RECOVERY_LINK',
   'CREATE_OR_REUSE_PAYMENT_LINK',
   'OFFER_ALTERNATE_PAYMENT_METHOD',
   'WAIT',
@@ -21,6 +23,21 @@ export const APPROVED_ACTIONS: ApprovedAction[] = [
 ];
 
 export type CaseStatus =
+  // Product state machine:
+  | 'FAILED'
+  | 'ANALYZING'
+  | 'DECISION_READY'
+  | 'POLICY_CHECK'
+  | 'ACTION_PENDING'
+  | 'ACTION_EXECUTED'
+  | 'OUTCOME_MONITORED'
+  | 'RECOVERED'
+  | 'STOPPED'
+  | 'ESCALATED'
+  | 'HUMAN_REVIEW'
+  | 'EXPIRED'
+  | 'FAILED_RECOVERY'
+  // Legacy aliases:
   | 'EVENT_RECEIVED'
   | 'VERIFIED'
   | 'DEDUPLICATED'
@@ -28,18 +45,13 @@ export type CaseStatus =
   | 'DIAGNOSED'
   | 'PRIORITIZED'
   | 'ACTION_SELECTED'
-  | 'POLICY_CHECKED'
-  | 'HUMAN_REVIEW'
-  | 'ACTION_EXECUTED'
-  | 'OUTCOME_MONITORED'
-  | 'RECOVERED'
-  | 'FAILED'
-  | 'STOPPED'
-  | 'ESCALATED';
+  | 'POLICY_CHECKED';
 
 export type PolicyResult = 'ALLOW' | 'BLOCK' | 'ESCALATE';
 
 export type ConsentStatus = 'CONSENTED' | 'OPTED_OUT' | 'UNKNOWN';
+
+export type CustomerFriction = 'LOW' | 'MEDIUM' | 'HIGH';
 
 export type PaymentMethod = 'card' | 'upi' | 'netbanking' | 'wallet' | 'emi' | 'unknown';
 
@@ -72,6 +84,7 @@ export interface RecoveryCase {
   payment_id: string;
   order_id?: string | null;
   payment_link_id?: string | null;
+  recovery_url?: string | null;
   amount: number; // in smallest currency unit (e.g. paise for INR)
   currency: string;
   failure_code: string;
@@ -95,10 +108,14 @@ export interface Decision {
   model_version: string;
   prompt_version: string;
   diagnosis: string;
-  evidence: string[];
+  failure_category: string;
+  recoverability: number; // 0.0 - 1.0
   recommended_action: ApprovedAction;
   confidence: number; // 0.0 - 1.0
+  reason: string;
+  customer_friction: CustomerFriction;
   expected_value: number;
+  evidence: string[];
   rationale: string;
   created_at: string;
 }
@@ -138,6 +155,7 @@ export type AuditEventType =
   | 'TOOL_EXECUTION_ATTEMPTED'
   | 'TOOL_EXECUTION_COMPLETED'
   | 'TOOL_EXECUTION_FAILED'
+  | 'CUSTOMER_LINK_OPENED'
   | 'OUTCOME_VERIFIED'
   | 'CASE_RECOVERED'
   | 'CASE_CLOSED'
@@ -164,8 +182,12 @@ export interface WebhookEventRecord {
 }
 
 export interface MerchantPolicyConfig {
-  max_retry_attempts: number;
-  autonomous_amount_threshold: number; // in smallest currency unit (e.g. 50,000 INR = 5,000,000 paise)
+  autonomous_limit_inr: number; // In paise. Under ₹5,000 (500,000 paise): autonomous recovery
+  bounded_limit_inr: number; // In paise. ₹5,000–₹25,000 (2,500,000 paise): 1 bounded intervention
+  human_approval_above_inr: number; // Above ₹25,000: human approval required
+  max_retry_attempts: number; // Max total interventions per case (default: 2)
+  max_interventions_per_case: number; // Default: 2
+  autonomous_amount_threshold: number; // For compatibility (= human_approval_above_inr)
   policy_version: string;
   require_human_review_above_amount: number;
   min_confidence_for_autonomous_action: number;
@@ -174,12 +196,16 @@ export interface MerchantPolicyConfig {
 }
 
 export const DEFAULT_MERCHANT_POLICY: MerchantPolicyConfig = {
-  max_retry_attempts: 3,
-  autonomous_amount_threshold: 5000000, // 50,000 INR
-  policy_version: '1.0.0',
-  require_human_review_above_amount: 5000000,
+  autonomous_limit_inr: 500000, // ₹5,000
+  bounded_limit_inr: 2500000, // ₹25,000
+  human_approval_above_inr: 2500000, // ₹25,000
+  max_retry_attempts: 2,
+  max_interventions_per_case: 2,
+  autonomous_amount_threshold: 2500000, // ₹25,000
+  policy_version: '2.0.0',
+  require_human_review_above_amount: 2500000,
   min_confidence_for_autonomous_action: 0.65,
-  allowed_actions: ['RETRY', 'CREATE_OR_REUSE_PAYMENT_LINK', 'OFFER_ALTERNATE_PAYMENT_METHOD', 'WAIT', 'ESCALATE', 'STOP'],
+  allowed_actions: ['RETRY', 'SEND_RECOVERY_LINK', 'CREATE_OR_REUSE_PAYMENT_LINK', 'OFFER_ALTERNATE_PAYMENT_METHOD', 'ESCALATE', 'STOP'],
   prohibited_failure_codes_for_retry: [
     'BAD_REQUEST_ERROR',
     'EXPIRED_CARD',

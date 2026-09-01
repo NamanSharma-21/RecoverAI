@@ -25,7 +25,7 @@ export async function executeRetryPayment(
   };
 }
 
-export async function executeCreateOrReusePaymentLink(
+export async function executeSendRecoveryLink(
   c: RecoveryCase,
   provider: PaymentProvider
 ): Promise<ToolResult> {
@@ -33,13 +33,14 @@ export async function executeCreateOrReusePaymentLink(
     const existing = await provider.reusePaymentLink(c.payment_link_id);
     return {
       success: true,
-      action: 'CREATE_OR_REUSE_PAYMENT_LINK',
+      action: 'SEND_RECOVERY_LINK',
       data: {
         payment_link_id: existing.id,
         short_url: existing.short_url,
+        consumer_url: `/recover/${c.id}`,
         reused: true,
       },
-      message: `Reused existing payment link: ${existing.short_url}`,
+      message: `Reused recovery payment link: ${existing.short_url}`,
     };
   }
 
@@ -57,21 +58,28 @@ export async function executeCreateOrReusePaymentLink(
 
   return {
     success: true,
-    action: 'CREATE_OR_REUSE_PAYMENT_LINK',
+    action: 'SEND_RECOVERY_LINK',
     data: {
       payment_link_id: link.id,
       short_url: link.short_url,
+      consumer_url: `/recover/${c.id}`,
       reused: false,
     },
     message: `Created recovery payment link: ${link.short_url}`,
   };
 }
 
+export async function executeCreateOrReusePaymentLink(
+  c: RecoveryCase,
+  provider: PaymentProvider
+): Promise<ToolResult> {
+  return executeSendRecoveryLink(c, provider);
+}
+
 export async function executeOfferAlternatePaymentMethod(
   c: RecoveryCase,
   provider: PaymentProvider
 ): Promise<ToolResult> {
-  // Generates a multi-method payment recovery link emphasizing UPI / alternate cards
   const link = await provider.createPaymentLink({
     amount: c.amount,
     currency: c.currency,
@@ -86,13 +94,14 @@ export async function executeOfferAlternatePaymentMethod(
 
   return {
     success: true,
-    action: 'OFFER_ALTERNATE_PAYMENT_METHOD',
+    action: 'SEND_RECOVERY_LINK',
     data: {
       payment_link_id: link.id,
       short_url: link.short_url,
+      consumer_url: `/recover/${c.id}`,
       recommended_alternatives: ['upi', 'netbanking', 'alternate_card'],
     },
-    message: `Generated multi-rail checkout link: ${link.short_url}`,
+    message: `Generated multi-rail recovery link: ${link.short_url}`,
   };
 }
 

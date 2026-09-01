@@ -15,6 +15,7 @@ CREATE TABLE IF NOT EXISTS recovery_cases (
   payment_id TEXT NOT NULL,
   order_id TEXT,
   payment_link_id TEXT,
+  recovery_url TEXT,
   amount INTEGER NOT NULL,
   currency TEXT NOT NULL,
   failure_code TEXT NOT NULL,
@@ -42,9 +43,13 @@ CREATE TABLE IF NOT EXISTS decisions (
   model_version TEXT NOT NULL,
   prompt_version TEXT NOT NULL,
   diagnosis TEXT NOT NULL,
+  failure_category TEXT NOT NULL DEFAULT 'TRANSIENT',
+  recoverability REAL NOT NULL DEFAULT 0.5,
   evidence TEXT NOT NULL, -- JSON array of strings
   recommended_action TEXT NOT NULL,
   confidence REAL NOT NULL,
+  reason TEXT NOT NULL DEFAULT '',
+  customer_friction TEXT NOT NULL DEFAULT 'LOW',
   expected_value INTEGER NOT NULL,
   rationale TEXT NOT NULL,
   created_at TEXT NOT NULL,
@@ -57,9 +62,9 @@ CREATE TABLE IF NOT EXISTS policy_checks (
   id TEXT PRIMARY KEY,
   decision_id TEXT NOT NULL,
   case_id TEXT NOT NULL,
-  allowed INTEGER NOT NULL, -- 1 for ALLOW, 0 for BLOCK / ESCALATE
-  policy_result TEXT NOT NULL, -- 'ALLOW' | 'BLOCK' | 'ESCALATE'
-  reasons TEXT NOT NULL, -- JSON array of strings
+  allowed INTEGER NOT NULL,
+  policy_result TEXT NOT NULL,
+  reasons TEXT NOT NULL,
   policy_version TEXT NOT NULL,
   created_at TEXT NOT NULL,
   FOREIGN KEY (case_id) REFERENCES recovery_cases(id) ON DELETE CASCADE
@@ -73,9 +78,9 @@ CREATE TABLE IF NOT EXISTS tool_executions (
   decision_id TEXT,
   tool_name TEXT NOT NULL,
   idempotency_key TEXT NOT NULL UNIQUE,
-  arguments TEXT NOT NULL, -- JSON string
-  result TEXT NOT NULL, -- JSON string
-  status TEXT NOT NULL, -- 'PENDING' | 'SUCCESS' | 'FAILED'
+  arguments TEXT NOT NULL,
+  result TEXT NOT NULL,
+  status TEXT NOT NULL,
   created_at TEXT NOT NULL,
   FOREIGN KEY (case_id) REFERENCES recovery_cases(id) ON DELETE CASCADE
 );
@@ -89,7 +94,7 @@ CREATE TABLE IF NOT EXISTS audit_events (
   event_type TEXT NOT NULL,
   actor TEXT NOT NULL,
   source TEXT NOT NULL,
-  metadata TEXT NOT NULL, -- JSON string
+  metadata TEXT NOT NULL,
   timestamp TEXT NOT NULL
 );
 

@@ -11,6 +11,7 @@ import {
   PaymentMethod,
   ApprovedAction,
   PolicyResult,
+  CustomerFriction,
 } from '../domain/types';
 
 export class Repository {
@@ -68,11 +69,11 @@ export class Repository {
     this.db
       .prepare(
         `INSERT INTO recovery_cases (
-          id, merchant_id, event_id, payment_id, order_id, payment_link_id,
+          id, merchant_id, event_id, payment_id, order_id, payment_link_id, recovery_url,
           amount, currency, failure_code, failure_description, payment_method,
           customer_context, attempt_count, status, recoverability_score,
           expected_recovery_value, consent_status, policy_version, created_at, updated_at
-        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
       )
       .run(
         c.id,
@@ -81,6 +82,7 @@ export class Repository {
         c.payment_id,
         c.order_id || null,
         c.payment_link_id || null,
+        c.recovery_url || null,
         c.amount,
         c.currency,
         c.failure_code,
@@ -118,6 +120,7 @@ export class Repository {
           payment_id = ?,
           order_id = ?,
           payment_link_id = ?,
+          recovery_url = ?,
           amount = ?,
           currency = ?,
           failure_code = ?,
@@ -139,6 +142,7 @@ export class Repository {
         updated.payment_id,
         updated.order_id || null,
         updated.payment_link_id || null,
+        updated.recovery_url || null,
         updated.amount,
         updated.currency,
         updated.failure_code,
@@ -180,6 +184,20 @@ export class Repository {
     return this.mapCaseRow(row);
   }
 
+  getCaseByPaymentLinkId(paymentLinkId: string): RecoveryCase | null {
+    const row = this.db
+      .prepare('SELECT * FROM recovery_cases WHERE payment_link_id = ? ORDER BY created_at DESC LIMIT 1')
+      .get(paymentLinkId) as any;
+    if (!row) return null;
+    return this.mapCaseRow(row);
+  }
+
+  /**
+   * Lists cases sorted by economic priority:
+   * 1. Amount at risk (DESC)
+   * 2. Recoverability score (DESC)
+   * 3. Urgency / creation date (DESC)
+   */
   listCases(filters?: { status?: CaseStatus; limit?: number; offset?: number }): RecoveryCase[] {
     let sql = 'SELECT * FROM recovery_cases';
     const params: any[] = [];
@@ -189,7 +207,8 @@ export class Repository {
       params.push(filters.status);
     }
 
-    sql += ' ORDER BY created_at DESC';
+    // Prioritized ranking: High Amount -> High Recoverability -> Newest
+    sql += ' ORDER BY amount DESC, recoverability_score DESC, created_at DESC';
 
     if (filters?.limit) {
       sql += ' LIMIT ?';
@@ -211,6 +230,7 @@ export class Repository {
     stoppedCases: number;
     escalatedCases: number;
     humanReviewCases: number;
+    activeRecoveriesCount: number;
     totalAtRiskAmount: number;
     totalRecoveredAmount: number;
     recoveryRate: number;
@@ -224,7 +244,7 @@ export class Repository {
       .get() as any;
 
     const failedRow = this.db
-      .prepare("SELECT COUNT(*) as count FROM recovery_cases WHERE status = 'FAILED'")
+      .prepare("SELECT COUNT(*) as count FROM recovery_cases WHERE status IN ('FAILED', 'FAILED_RECOVERY')")
       .get() as any;
 
     const stoppedRow = this.db
@@ -237,6 +257,10 @@ export class Repository {
 
     const reviewRow = this.db
       .prepare("SELECT COUNT(*) as count FROM recovery_cases WHERE status = 'HUMAN_REVIEW'")
+      .get() as any;
+
+    const activeRow = this.db
+      .prepare("SELECT COUNT(*) as count FROM recovery_cases WHERE status IN ('ACTION_EXECUTED', 'OUTCOME_MONITORED', 'ACTION_PENDING', 'ANALYZING', 'DECISION_READY', 'POLICY_CHECK', 'DIAGNOSED', 'PRIORITIZED', 'ACTION_SELECTED', 'POLICY_CHECKED')")
       .get() as any;
 
     const totalCases = totalRow?.count || 0;
@@ -252,6 +276,7 @@ export class Repository {
       stoppedCases: stoppedRow?.count || 0,
       escalatedCases: escalatedRow?.count || 0,
       humanReviewCases: reviewRow?.count || 0,
+      activeRecoveriesCount: activeRow?.count || 0,
       totalAtRiskAmount,
       totalRecoveredAmount,
       recoveryRate,
@@ -266,6 +291,7 @@ export class Repository {
       payment_id: row.payment_id,
       order_id: row.order_id,
       payment_link_id: row.payment_link_id,
+      recovery_url: row.recovery_url,
       amount: row.amount,
       currency: row.currency,
       failure_code: row.failure_code,
@@ -290,8 +316,9 @@ export class Repository {
       .prepare(
         `INSERT INTO decisions (
           id, case_id, model_provider, model_version, prompt_version,
-          diagnosis, evidence, recommended_action, confidence, expected_value, rationale, created_at
-        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
+          diagnosis, failure_category, recoverability, evidence, recommended_action, confidence,
+          reason, customer_friction, expected_value, rationale, created_at
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
       )
       .run(
         d.id,
@@ -300,11 +327,15 @@ export class Repository {
         d.model_version,
         d.prompt_version,
         d.diagnosis,
-        JSON.stringify(d.evidence),
+        d.failure_category || 'TRANSIENT',
+        d.recoverability ?? 0.5,
+        JSON.stringify(d.evidence || []),
         d.recommended_action,
         d.confidence,
+        d.reason || d.rationale || '',
+        d.customer_friction || 'LOW',
         d.expected_value,
-        d.rationale,
+        d.rationale || d.reason || '',
         d.created_at
       );
   }
@@ -321,11 +352,15 @@ export class Repository {
       model_version: r.model_version,
       prompt_version: r.prompt_version,
       diagnosis: r.diagnosis,
+      failure_category: r.failure_category || 'TRANSIENT',
+      recoverability: r.recoverability ?? 0.5,
       evidence: JSON.parse(r.evidence || '[]'),
       recommended_action: r.recommended_action as ApprovedAction,
       confidence: r.confidence,
+      reason: r.reason || r.rationale || '',
+      customer_friction: (r.customer_friction || 'LOW') as CustomerFriction,
       expected_value: r.expected_value,
-      rationale: r.rationale,
+      rationale: r.rationale || r.reason || '',
       created_at: r.created_at,
     }));
   }
@@ -342,11 +377,15 @@ export class Repository {
       model_version: row.model_version,
       prompt_version: row.prompt_version,
       diagnosis: row.diagnosis,
+      failure_category: row.failure_category || 'TRANSIENT',
+      recoverability: row.recoverability ?? 0.5,
       evidence: JSON.parse(row.evidence || '[]'),
       recommended_action: row.recommended_action as ApprovedAction,
       confidence: row.confidence,
+      reason: row.reason || row.rationale || '',
+      customer_friction: (row.customer_friction || 'LOW') as CustomerFriction,
       expected_value: row.expected_value,
-      rationale: row.rationale,
+      rationale: row.rationale || row.reason || '',
       created_at: row.created_at,
     };
   }

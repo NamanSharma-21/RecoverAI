@@ -44,7 +44,7 @@ export class PolicyEngine {
       reasons.push(actionCheck.reason!);
     }
 
-    // 5. Evidence check
+    // 5. Evidence requirement check
     const evidenceCheck = PolicyRules.checkRequiredEvidence(d);
     if (!evidenceCheck.ok) {
       shouldBlock = true;
@@ -58,22 +58,22 @@ export class PolicyEngine {
       reasons.push(categoryCheck.reason!);
     }
 
-    // 7. Retry limit check
-    const retryCheck = PolicyRules.checkRetryLimits(c, d, this.config);
-    if (!retryCheck.ok) {
+    // 7. Max intervention limit check
+    const limitCheck = PolicyRules.checkInterventionLimits(c, d, this.config);
+    if (!limitCheck.ok) {
       shouldBlock = true;
-      reasons.push(retryCheck.reason!);
+      reasons.push(limitCheck.reason!);
     }
 
-    // 8. Amount threshold check
-    const amountCheck = PolicyRules.checkAutonomousAmountThreshold(c, d, this.config);
-    if (!amountCheck.ok) {
-      if (amountCheck.escalate) {
+    // 8. Tiered amount policy check
+    const tieredCheck = PolicyRules.checkTieredAmountPolicy(c, d, this.config);
+    if (!tieredCheck.ok) {
+      if (tieredCheck.escalate) {
         shouldEscalate = true;
       } else {
         shouldBlock = true;
       }
-      reasons.push(amountCheck.reason!);
+      reasons.push(tieredCheck.reason!);
     }
 
     // 9. Confidence threshold check
@@ -98,11 +98,11 @@ export class PolicyEngine {
       policyResult = 'ESCALATE';
       allowed = false;
     } else if (d.recommended_action === 'STOP') {
-      policyResult = 'ALLOW'; // Allowed to execute stop
+      policyResult = 'ALLOW';
       allowed = true;
-      reasons.push('Case execution stopped as per policy.');
+      reasons.push('Case stopped as per policy.');
     } else {
-      reasons.push('All deterministic policy guardrails passed. Execution allowed.');
+      reasons.push('All deterministic policy guardrails passed. Recovery execution approved.');
     }
 
     return {

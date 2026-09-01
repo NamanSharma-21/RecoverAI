@@ -25,6 +25,7 @@ export class PolicyOnlyStrategy implements EvaluationStrategy {
       payment_id: c.payment_id,
       order_id: c.order_id,
       payment_link_id: null,
+      recovery_url: null,
       amount: c.amount,
       currency: c.currency,
       failure_code: c.failure_code,
@@ -47,9 +48,9 @@ export class PolicyOnlyStrategy implements EvaluationStrategy {
     if (category === 'TRANSIENT') {
       ruleAction = 'RETRY';
     } else if (category === 'AUTHENTICATION' || category === 'CUSTOMER_ACTION') {
-      ruleAction = 'CREATE_OR_REUSE_PAYMENT_LINK';
+      ruleAction = 'SEND_RECOVERY_LINK';
     } else if (category === 'HARD_DECLINE') {
-      ruleAction = 'OFFER_ALTERNATE_PAYMENT_METHOD';
+      ruleAction = 'SEND_RECOVERY_LINK';
     }
 
     const pseudoDecision: Decision = {
@@ -59,9 +60,13 @@ export class PolicyOnlyStrategy implements EvaluationStrategy {
       model_version: 'v1',
       prompt_version: 'none',
       diagnosis: `Static heuristic category: ${category}`,
+      failure_category: category,
+      recoverability: 0.5,
       evidence: [`Failure category: ${category}`],
       recommended_action: ruleAction,
       confidence: 0.75,
+      reason: 'Rule-based heuristic assignment.',
+      customer_friction: 'LOW',
       expected_value: Math.round(c.amount * 0.5),
       rationale: 'Rule-based assignment.',
       created_at: new Date().toISOString(),
@@ -85,7 +90,7 @@ export class PolicyOnlyStrategy implements EvaluationStrategy {
       policyResult: policyCheck.policy_result,
       recovered: outcome.recovered,
       recoveredAmount: outcome.recoveredAmount,
-      isPolicyViolation: false, // Guardrails active: 0 violations
+      isPolicyViolation: false,
       isUnnecessaryIntervention: outcome.isUnnecessaryIntervention,
       isHardDeclineRetry: outcome.isHardDeclineRetry,
       executionTimeMs: Number((end - start).toFixed(2)),

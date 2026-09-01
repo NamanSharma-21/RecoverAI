@@ -1,76 +1,83 @@
-import { CaseStructuredContext } from '../context/context-builder';
-import { Decision, ApprovedAction } from '../domain/types';
-import { AIDecisionOutputSchema, AIDecisionOutput } from '../domain/schemas';
 import { LLMClient, createLLMClient } from './llm-client';
+import { CaseStructuredContext } from '../context/context-builder';
+import { AIDecisionOutputSchema, AIDecisionOutput } from '../domain/schemas';
+import { Decision, ApprovedAction, CustomerFriction } from '../domain/types';
 
 export class DecisionService {
-  constructor(
-    private llmClient: LLMClient = createLLMClient(),
-    private maxRetries: number = 2
-  ) {}
+  private llmClient: LLMClient;
+  private maxRetries: number;
+
+  constructor(llmClient?: LLMClient, maxRetries: number = 2) {
+    this.llmClient = llmClient || createLLMClient();
+    this.maxRetries = maxRetries;
+  }
 
   async decide(context: CaseStructuredContext): Promise<Decision> {
+    let rawOutput = '';
+    let parsed: AIDecisionOutput | null = null;
     let lastError: Error | null = null;
+    let isFallback = false;
 
-    // Bounded retry loop for LLM output schema compliance
+    // Total attempts = initial attempt (1) + maxRetries
     for (let attempt = 0; attempt <= this.maxRetries; attempt++) {
       try {
-        const rawOutput = await this.llmClient.generateDecision(context);
-        const parsedJson = JSON.parse(rawOutput);
-        const validated: AIDecisionOutput = AIDecisionOutputSchema.parse(parsedJson);
-
-        return {
-          id: `dec_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`,
-          case_id: context.case_id,
-          model_provider: this.llmClient.getProviderName(),
-          model_version: this.llmClient.getModelName(),
-          prompt_version: '1.0.0',
-          diagnosis: validated.diagnosis,
-          evidence: validated.evidence,
-          recommended_action: validated.recommended_action,
-          confidence: validated.confidence,
-          expected_value: validated.expected_recovery_value,
-          rationale: validated.rationale,
-          created_at: new Date().toISOString(),
-        };
+        rawOutput = await this.llmClient.generateDecision(context);
+        const json = JSON.parse(rawOutput);
+        parsed = AIDecisionOutputSchema.parse(json);
+        break;
       } catch (err: any) {
         lastError = err;
       }
     }
 
-    // Fallback on LLM failure or malformed JSON
-    return this.fallbackDecision(context, lastError);
-  }
-
-  /**
-   * Safe fallback decision when model is unavailable or malformed.
-   * Never fabricates an LLM response; explicitly attributes to SYSTEM fallback.
-   */
-  private fallbackDecision(context: CaseStructuredContext, error: Error | null): Decision {
-    let action: ApprovedAction = 'ESCALATE';
-    let rationale = `LLM decision service failed (${error?.message || 'unknown error'}). Falling back to safe escalation.`;
-
-    if (context.failure_category === 'TRANSIENT' && context.attempt_count < context.policy_constraints.max_retries) {
-      action = 'RETRY';
-      rationale = 'Policy fallback: transient error with remaining retry budget.';
-    } else if (context.failure_category === 'HARD_DECLINE') {
-      action = 'OFFER_ALTERNATE_PAYMENT_METHOD';
-      rationale = 'Policy fallback: hard decline on payment method.';
+    // Fallback if model output is malformed or invalid schema
+    if (!parsed) {
+      isFallback = true;
+      parsed = this.createFallbackDecision(context, lastError?.message || 'Malformed or unapproved model output');
     }
 
     return {
-      id: `dec_fb_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`,
+      id: `dec_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`,
       case_id: context.case_id,
-      model_provider: 'system_fallback',
-      model_version: 'fallback_v1',
-      prompt_version: 'none',
-      diagnosis: `Fallback diagnosis for ${context.failure_code} (${context.failure_category})`,
-      evidence: context.observable_evidence,
-      recommended_action: action,
-      confidence: 0.50,
-      expected_value: context.expected_recovery_value,
-      rationale,
+      model_provider: isFallback ? 'system_fallback' : this.llmClient.getProviderName(),
+      model_version: isFallback ? 'fallback-rules-v1' : this.llmClient.getModelName(),
+      prompt_version: 'v2.0',
+      diagnosis: parsed.diagnosis,
+      failure_category: parsed.failure_category || context.failure_category,
+      recoverability: parsed.recoverability ?? context.recoverability_score,
+      evidence: parsed.evidence || context.observable_evidence,
+      recommended_action: parsed.recommended_action,
+      confidence: parsed.confidence,
+      reason: parsed.reason || parsed.rationale || '',
+      customer_friction: (parsed.customer_friction || 'LOW') as CustomerFriction,
+      expected_value: parsed.expected_recovery_value ?? context.expected_recovery_value,
+      rationale: parsed.rationale || parsed.reason || '',
       created_at: new Date().toISOString(),
+    };
+  }
+
+  private createFallbackDecision(context: CaseStructuredContext, errorReason: string): AIDecisionOutput {
+    const isHardDecline = context.failure_category === 'HARD_DECLINE';
+    const isTransient = context.failure_category === 'TRANSIENT';
+
+    let action: ApprovedAction = 'ESCALATE';
+    if (isTransient && context.attempt_count < 1) {
+      action = 'RETRY';
+    } else if (isHardDecline) {
+      action = 'OFFER_ALTERNATE_PAYMENT_METHOD';
+    }
+
+    return {
+      diagnosis: `Fallback diagnosis generated: ${context.failure_code} on ${context.payment_method}. (LLM unavailable: ${errorReason})`,
+      failure_category: context.failure_category,
+      recoverability: context.recoverability_score,
+      recommended_action: action,
+      confidence: 0.5,
+      reason: `System fallback triggered: ${errorReason}`,
+      customer_friction: 'MEDIUM',
+      expected_recovery_value: context.expected_recovery_value,
+      evidence: context.observable_evidence,
+      rationale: `Fallback triggered due to AI error: ${errorReason}`,
     };
   }
 }
