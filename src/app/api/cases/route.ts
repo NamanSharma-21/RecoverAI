@@ -16,10 +16,16 @@ export async function GET(req: NextRequest) {
     const cases = repo.listCases({ status: status || undefined, limit });
     const stats = repo.getDashboardStats();
 
+    const enrichedCases = cases.map((c) => ({
+      ...c,
+      latest_decision: repo.getLatestDecisionByCaseId(c.id),
+      latest_policy_check: repo.getLatestPolicyCheckByCaseId(c.id),
+    }));
+
     return NextResponse.json({
       success: true,
       stats,
-      cases,
+      cases: enrichedCases,
     });
   } catch (err: any) {
     return NextResponse.json(
