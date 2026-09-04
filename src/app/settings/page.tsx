@@ -70,178 +70,177 @@ export default function SettingsPage() {
   };
 
   return (
-    <div className="space-y-8">
-        
-        {/* Navigation & Header */}
-        <div className="flex items-center justify-between border-b border-slate-800 pb-6">
-          <div className="flex items-center space-x-3">
-            <Link href="/" className="text-slate-400 hover:text-white text-xs">
-              ← Back to Recovery Dashboard
-            </Link>
-            <span className="text-slate-600">/</span>
-            <span className="text-xs font-semibold text-slate-200">Merchant Recovery Policy Settings</span>
-          </div>
-
-          <div className="text-xs font-mono text-slate-400">
-            Policy Version: <span className="text-blue-400">{settings.policy_version}</span>
-          </div>
+    <div className="space-y-8 pb-16">
+      {/* Navigation & Header */}
+      <div className="flex items-center justify-between border-b border-[#ebe8e4] pb-4">
+        <div className="flex items-center space-x-3 text-xs">
+          <Link href="/" className="text-[#777169] hover:text-[#000000] transition-colors">
+            ← Back to Dashboard
+          </Link>
+          <span className="text-[#ebe8e4]">/</span>
+          <span className="text-[#000000] font-normal">Policy Guardrails Configuration</span>
         </div>
 
+        <div className="text-xs font-mono text-[#777169]">
+          Policy Version: <span className="text-[#000000] font-medium">{settings.policy_version}</span>
+        </div>
+      </div>
+
+      <div>
+        <h1 className="text-2xl md:text-3xl font-light text-[#000000] tracking-tight">
+          Merchant policy & guardrails configuration
+        </h1>
+        <p className="text-xs md:text-sm text-[#44403b] mt-1.5 max-w-3xl font-normal leading-relaxed">
+          Deterministic boundaries enforced before any recovery action executes. The AI cannot bypass these limits.
+        </p>
+      </div>
+
+      {saveSuccess && (
+        <div className="p-4 bg-[#f5f3f1] border border-[#ebe8e4] rounded-[16px] text-[#000000] text-xs flex items-center space-x-2">
+          <span className="w-1.5 h-1.5 rounded-full bg-[#0447ff]"></span>
+          <span>Policy configuration saved to SQLite database. Real-time control loop updated.</span>
+        </div>
+      )}
+
+      <form onSubmit={handleSave} className="rounded-[20px] bg-[#f5f3f1] border border-[#ebe8e4] p-6 sm:p-8 space-y-6">
+        {/* Section 1: Financial Limits */}
         <div>
-          <h1 className="text-2xl font-bold text-white tracking-tight">Merchant Policy & Guardrails Configuration</h1>
-          <p className="text-xs text-slate-400 mt-1">
-            These rules dynamically control the deterministic policy engine. The AI cannot bypass these boundaries.
+          <h3 className="text-sm font-normal text-[#000000] mb-1">1. Tiered financial limits & thresholds</h3>
+          <p className="text-xs text-[#777169] mb-4">
+            Determines when RecoverAI acts autonomously vs requiring operator review.
           </p>
+
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <div className="bg-[#fdfcfc] border border-[#ebe8e4] rounded-[16px] p-5">
+              <label className="text-xs font-normal text-[#000000] block mb-1">
+                Autonomous Recovery Limit (₹)
+              </label>
+              <div className="text-[11px] text-[#777169] mb-3">
+                Transactions under this amount are automatically recovered.
+              </div>
+              <input
+                type="number"
+                value={settings.autonomous_limit_inr / 100}
+                onChange={(e) =>
+                  setSettings({
+                    ...settings,
+                    autonomous_limit_inr: Number(e.target.value) * 100,
+                  })
+                }
+                className="w-full bg-[#fdfcfc] border border-[#ebe8e4] rounded-full px-4 py-2 text-xs text-[#000000] font-mono focus:outline-none focus:border-[#44403b] transition-colors"
+              />
+            </div>
+
+            <div className="bg-[#fdfcfc] border border-[#ebe8e4] rounded-[16px] p-5">
+              <label className="text-xs font-normal text-[#000000] block mb-1">
+                Mandatory Human Review Threshold (₹)
+              </label>
+              <div className="text-[11px] text-[#777169] mb-3">
+                Orders exceeding this value strictly escalate to operator review.
+              </div>
+              <input
+                type="number"
+                value={settings.human_approval_above_inr / 100}
+                onChange={(e) =>
+                  setSettings({
+                    ...settings,
+                    human_approval_above_inr: Number(e.target.value) * 100,
+                    bounded_limit_inr: Number(e.target.value) * 100,
+                  })
+                }
+                className="w-full bg-[#fdfcfc] border border-[#ebe8e4] rounded-full px-4 py-2 text-xs text-[#000000] font-mono focus:outline-none focus:border-[#44403b] transition-colors"
+              />
+            </div>
+          </div>
         </div>
 
-        {saveSuccess && (
-          <div className="p-4 bg-emerald-950/40 border border-emerald-500/40 rounded-xl text-emerald-300 text-xs flex items-center space-x-2">
-            <span>✓</span>
-            <span>Policy configuration saved to SQLite database. Real-time control loop updated.</span>
-          </div>
-        )}
+        {/* Section 2: Intervention Limits & Cooldowns */}
+        <div className="border-t border-[#ebe8e4] pt-6">
+          <h3 className="text-sm font-normal text-[#000000] mb-1">2. Recovery frequency & intervention budget</h3>
+          <p className="text-xs text-[#777169] mb-4">
+            Guards against excessive customer contact and gateway spam.
+          </p>
 
-        <form onSubmit={handleSave} className="bg-slate-900 border border-slate-800 rounded-2xl p-6 md:p-8 space-y-6">
-          
-          {/* Section 1: Financial Limits */}
-          <div>
-            <h3 className="text-sm font-bold text-white mb-1">1. Tiered Financial Limits & Thresholds</h3>
-            <p className="text-xs text-slate-400 mb-4">
-              Determines when RecoverAI acts autonomously vs requiring operator review.
-            </p>
-
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-              <div className="bg-slate-950 border border-slate-800 rounded-xl p-4">
-                <label className="text-xs font-semibold text-slate-300 block mb-1">
-                  Autonomous Recovery Limit (₹)
-                </label>
-                <div className="text-[11px] text-slate-400 mb-2">
-                  Transactions under this amount are automatically recovered.
-                </div>
-                <input
-                  type="number"
-                  value={settings.autonomous_limit_inr / 100}
-                  onChange={(e) =>
-                    setSettings({
-                      ...settings,
-                      autonomous_limit_inr: Number(e.target.value) * 100,
-                    })
-                  }
-                  className="w-full bg-slate-900 border border-slate-700 rounded-lg px-3 py-2 text-xs text-white font-mono"
-                />
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+            <div className="bg-[#fdfcfc] border border-[#ebe8e4] rounded-[16px] p-5">
+              <label className="text-xs font-normal text-[#000000] block mb-1">
+                Max Interventions Per Case
+              </label>
+              <div className="text-[11px] text-[#777169] mb-3">
+                Capped number of retry/link actions.
               </div>
+              <input
+                type="number"
+                min={1}
+                max={5}
+                value={settings.max_interventions_per_case}
+                onChange={(e) =>
+                  setSettings({
+                    ...settings,
+                    max_interventions_per_case: Number(e.target.value),
+                  })
+                }
+                className="w-full bg-[#fdfcfc] border border-[#ebe8e4] rounded-full px-4 py-2 text-xs text-[#000000] font-mono focus:outline-none focus:border-[#44403b] transition-colors"
+              />
+            </div>
 
-              <div className="bg-slate-950 border border-slate-800 rounded-xl p-4">
-                <label className="text-xs font-semibold text-slate-300 block mb-1">
-                  Mandatory Human Review Threshold (₹)
-                </label>
-                <div className="text-[11px] text-slate-400 mb-2">
-                  Orders exceeding this value strictly escalate to operator review.
-                </div>
-                <input
-                  type="number"
-                  value={settings.human_approval_above_inr / 100}
-                  onChange={(e) =>
-                    setSettings({
-                      ...settings,
-                      human_approval_above_inr: Number(e.target.value) * 100,
-                      bounded_limit_inr: Number(e.target.value) * 100,
-                    })
-                  }
-                  className="w-full bg-slate-900 border border-slate-700 rounded-lg px-3 py-2 text-xs text-white font-mono"
-                />
+            <div className="bg-[#fdfcfc] border border-[#ebe8e4] rounded-[16px] p-5">
+              <label className="text-xs font-normal text-[#000000] block mb-1">
+                Recovery Cooldown (Minutes)
+              </label>
+              <div className="text-[11px] text-[#777169] mb-3">
+                Delay before next scheduled retry.
               </div>
+              <input
+                type="number"
+                min={1}
+                value={settings.recovery_cooldown_minutes}
+                onChange={(e) =>
+                  setSettings({
+                    ...settings,
+                    recovery_cooldown_minutes: Number(e.target.value),
+                  })
+                }
+                className="w-full bg-[#fdfcfc] border border-[#ebe8e4] rounded-full px-4 py-2 text-xs text-[#000000] font-mono focus:outline-none focus:border-[#44403b] transition-colors"
+              />
+            </div>
+
+            <div className="bg-[#fdfcfc] border border-[#ebe8e4] rounded-[16px] p-5">
+              <label className="text-xs font-normal text-[#000000] block mb-1">
+                Min AI Confidence Required
+              </label>
+              <div className="text-[11px] text-[#777169] mb-3">
+                Low-confidence cases escalate.
+              </div>
+              <input
+                type="number"
+                step="0.05"
+                min={0.1}
+                max={0.99}
+                value={settings.min_confidence_for_autonomous_action}
+                onChange={(e) =>
+                  setSettings({
+                    ...settings,
+                    min_confidence_for_autonomous_action: Number(e.target.value),
+                  })
+                }
+                className="w-full bg-[#fdfcfc] border border-[#ebe8e4] rounded-full px-4 py-2 text-xs text-[#000000] font-mono focus:outline-none focus:border-[#44403b] transition-colors"
+              />
             </div>
           </div>
+        </div>
 
-          {/* Section 2: Intervention Limits & Cooldowns */}
-          <div className="border-t border-slate-800 pt-6">
-            <h3 className="text-sm font-bold text-white mb-1">2. Recovery Frequency & Intervention Budget</h3>
-            <p className="text-xs text-slate-400 mb-4">
-              Guards against excessive customer contact and gateway spam.
-            </p>
-
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-              <div className="bg-slate-950 border border-slate-800 rounded-xl p-4">
-                <label className="text-xs font-semibold text-slate-300 block mb-1">
-                  Max Interventions Per Case
-                </label>
-                <div className="text-[11px] text-slate-400 mb-2">
-                  Capped number of retry/link actions.
-                </div>
-                <input
-                  type="number"
-                  min={1}
-                  max={5}
-                  value={settings.max_interventions_per_case}
-                  onChange={(e) =>
-                    setSettings({
-                      ...settings,
-                      max_interventions_per_case: Number(e.target.value),
-                    })
-                  }
-                  className="w-full bg-slate-900 border border-slate-700 rounded-lg px-3 py-2 text-xs text-white font-mono"
-                />
-              </div>
-
-              <div className="bg-slate-950 border border-slate-800 rounded-xl p-4">
-                <label className="text-xs font-semibold text-slate-300 block mb-1">
-                  Recovery Cooldown (Minutes)
-                </label>
-                <div className="text-[11px] text-slate-400 mb-2">
-                  Delay before next scheduled retry.
-                </div>
-                <input
-                  type="number"
-                  min={1}
-                  value={settings.recovery_cooldown_minutes}
-                  onChange={(e) =>
-                    setSettings({
-                      ...settings,
-                      recovery_cooldown_minutes: Number(e.target.value),
-                    })
-                  }
-                  className="w-full bg-slate-900 border border-slate-700 rounded-lg px-3 py-2 text-xs text-white font-mono"
-                />
-              </div>
-
-              <div className="bg-slate-950 border border-slate-800 rounded-xl p-4">
-                <label className="text-xs font-semibold text-slate-300 block mb-1">
-                  Min AI Confidence Required
-                </label>
-                <div className="text-[11px] text-slate-400 mb-2">
-                  Low-confidence cases escalate.
-                </div>
-                <input
-                  type="number"
-                  step="0.05"
-                  min={0.1}
-                  max={0.99}
-                  value={settings.min_confidence_for_autonomous_action}
-                  onChange={(e) =>
-                    setSettings({
-                      ...settings,
-                      min_confidence_for_autonomous_action: Number(e.target.value),
-                    })
-                  }
-                  className="w-full bg-slate-900 border border-slate-700 rounded-lg px-3 py-2 text-xs text-white font-mono"
-                />
-              </div>
-            </div>
-          </div>
-
-          {/* Submit CTA */}
-          <div className="border-t border-slate-800 pt-6 flex justify-end">
-            <button
-              type="submit"
-              disabled={saving}
-              className="px-6 py-2.5 bg-blue-600 hover:bg-blue-500 disabled:opacity-50 text-white font-semibold rounded-xl text-xs transition shadow-lg shadow-blue-600/25"
-            >
-              {saving ? 'Saving Policy...' : 'Save Policy Changes'}
-            </button>
-          </div>
-
-        </form>
+        {/* Submit CTA */}
+        <div className="border-t border-[#ebe8e4] pt-6 flex justify-end">
+          <button
+            type="submit"
+            disabled={saving}
+            className="px-6 py-2.5 bg-[#000000] hover:bg-[#44403b] text-[#fdfcfc] disabled:opacity-50 font-medium rounded-full text-xs transition-colors"
+          >
+            {saving ? 'Saving policy changes...' : 'Save policy changes'}
+          </button>
+        </div>
+      </form>
     </div>
   );
 }

@@ -8,36 +8,29 @@ export default {
   theme: {
     extend: {
       colors: {
-        background: 'var(--background)',
-        foreground: 'var(--foreground)',
-        card: 'var(--card)',
-        'card-foreground': 'var(--card-foreground)',
-        border: 'var(--border)',
-        primary: {
-          DEFAULT: '#3B82F6',
-          dark: '#2563EB',
-          light: '#60A5FA',
+        background: '#fdfcfc',
+        foreground: '#000000',
+        card: '#f5f3f1',
+        'card-foreground': '#000000',
+        border: '#ebe8e4',
+        eggshell: '#fdfcfc',
+        taupe: '#f5f3f1',
+        stone: '#ebe8e4',
+        ink: '#000000',
+        graphite: '#44403b',
+        smoke: '#777169',
+        ash: '#a59f97',
+        violet: {
+          DEFAULT: '#0447ff',
+          accent: '#0447ff',
         },
-        success: {
-          DEFAULT: '#10B981',
-          dark: '#059669',
-          light: '#34D399',
+        orange: {
+          DEFAULT: '#ff4704',
+          accent: '#ff4704',
         },
-        warning: {
-          DEFAULT: '#F59E0B',
-          dark: '#D97706',
-          light: '#FBBF24',
-        },
-        danger: {
-          DEFAULT: '#EF4444',
-          dark: '#DC2626',
-          light: '#F87171',
-        },
-        razorpay: {
-          DEFAULT: '#0C2340',
-          blue: '#0C44AC',
-          cyan: '#3395FF',
-        },
+      },
+      borderRadius: {
+        '20': '20px',
       },
     },
   },

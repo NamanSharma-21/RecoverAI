@@ -87,19 +87,19 @@ export default function ConsumerRecoveryPage({ params }: { params: { id: string 
 
   if (loading) {
     return (
-      <div className="min-h-screen bg-slate-950 text-white flex items-center justify-center p-4">
-        <div className="text-slate-400 animate-pulse text-sm">Loading secure checkout...</div>
+      <div className="min-h-screen bg-[#fdfcfc] text-[#000000] flex items-center justify-center p-4">
+        <div className="text-[#777169] font-mono text-xs animate-pulse">Loading secure checkout...</div>
       </div>
     );
   }
 
   if (!caseData) {
     return (
-      <div className="min-h-screen bg-slate-950 text-white flex items-center justify-center p-4">
-        <div className="bg-slate-900 border border-slate-800 rounded-xl p-8 max-w-md w-full text-center">
-          <h2 className="text-xl font-bold text-slate-200 mb-2">Payment Session Not Found</h2>
-          <p className="text-sm text-slate-400 mb-6">This recovery link may have expired or is invalid.</p>
-          <Link href="/" className="px-4 py-2 bg-blue-600 hover:bg-blue-500 rounded-lg text-sm font-medium">
+      <div className="min-h-screen bg-[#fdfcfc] text-[#000000] flex items-center justify-center p-4">
+        <div className="bg-[#f5f3f1] border border-[#ebe8e4] rounded-[20px] p-8 max-w-md w-full text-center">
+          <h2 className="text-xl font-normal text-[#000000] mb-2">Payment Session Not Found</h2>
+          <p className="text-xs text-[#777169] mb-6">This recovery link may have expired or is invalid.</p>
+          <Link href="/" className="px-5 py-2 bg-[#000000] hover:bg-[#44403b] text-[#fdfcfc] rounded-full text-xs font-medium transition-all inline-block">
             Return to Store
           </Link>
         </div>
@@ -110,53 +110,54 @@ export default function ConsumerRecoveryPage({ params }: { params: { id: string 
   const formattedAmount = `₹${(caseData.amount / 100).toLocaleString('en-IN')}`;
 
   return (
-    <div className="min-h-screen bg-slate-950 text-slate-100 flex flex-col justify-center items-center p-4 font-sans antialiased">
+    <div className="min-h-screen bg-[#fdfcfc] text-[#000000] flex flex-col justify-center items-center p-4 font-sans antialiased">
       {/* Brand Header */}
       <div className="w-full max-w-md mb-6 flex items-center justify-between">
         <div className="flex items-center space-x-2">
-          <div className="w-7 h-7 bg-blue-600 rounded flex items-center justify-center font-black text-xs tracking-tighter text-white">
+          <div className="w-6 h-6 bg-[#000000] rounded-full flex items-center justify-center font-medium text-[11px] text-[#fdfcfc]">
             R
           </div>
-          <span className="font-semibold text-sm tracking-tight text-slate-300">Secure Payment Checkout</span>
+          <span className="font-normal text-xs tracking-tight text-[#000000]">Secure Recovery Checkout</span>
         </div>
-        <div className="flex items-center space-x-1 text-xs text-slate-400">
-          <svg className="w-3.5 h-3.5 text-emerald-400" fill="currentColor" viewBox="0 0 20 20">
-            <path fillRule="evenodd" d="M5 9V7a5 5 0 0110 0v2a2 2 0 012 2v5a2 2 0 01-2 2H5a2 2 0 01-2-2v-5a2 2 0 012-2zm8-2v2H7V7a3 3 0 016 0z" clipRule="evenodd" />
-          </svg>
+        <div className="flex items-center space-x-1 text-xs text-[#777169]">
+          <span className="w-1.5 h-1.5 rounded-full bg-[#0447ff]" />
           <span>256-bit Encrypted</span>
         </div>
       </div>
 
       {/* Main Payment Card */}
-      <div className="w-full max-w-md bg-slate-900 border border-slate-800 rounded-2xl shadow-2xl p-6 relative overflow-hidden">
+      <div className="w-full max-w-md bg-[#f5f3f1] border border-[#ebe8e4] rounded-[20px] p-6 relative">
         {paidSuccess ? (
           <div className="text-center py-6">
-            <div className="w-16 h-16 bg-emerald-500/10 border border-emerald-500/30 text-emerald-400 rounded-full flex items-center justify-center mx-auto mb-4">
-              <svg className="w-8 h-8" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2.5" d="M5 13l4 4L19 7" />
+            <div className="w-12 h-12 bg-[#fdfcfc] border border-[#ebe8e4] text-[#000000] rounded-full flex items-center justify-center mx-auto mb-4">
+              <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M5 13l4 4L19 7" />
               </svg>
             </div>
-            <h2 className="text-2xl font-bold text-white mb-1">Payment Successful!</h2>
-            <p className="text-sm text-slate-400 mb-6">
-              Your payment of <span className="text-white font-semibold">{formattedAmount}</span> has been processed successfully.
+            <h2 className="text-xl font-light text-[#000000] mb-1">Payment Successful</h2>
+            <p className="text-xs text-[#777169] mb-6">
+              Your payment of <span className="text-[#000000] font-medium">{formattedAmount}</span> has been processed successfully.
             </p>
-            <div className="bg-slate-950/80 rounded-xl p-4 border border-slate-800 text-left mb-6 space-y-2 text-xs">
-              <div className="flex justify-between text-slate-400">
+            <div className="bg-[#fdfcfc] rounded-xl p-4 border border-[#ebe8e4] text-left mb-6 space-y-2 text-xs">
+              <div className="flex justify-between text-[#777169]">
                 <span>Transaction Status</span>
-                <span className="text-emerald-400 font-semibold">Captured & Confirmed</span>
+                <span className="text-[#000000] font-medium flex items-center space-x-1">
+                  <span className="w-1.5 h-1.5 rounded-full bg-[#0447ff]" />
+                  <span>Captured & Confirmed</span>
+                </span>
               </div>
-              <div className="flex justify-between text-slate-400">
+              <div className="flex justify-between text-[#777169]">
                 <span>Order Reference</span>
-                <span className="text-slate-200 font-mono">{caseData.order_id || caseData.id}</span>
+                <span className="text-[#44403b] font-mono">{caseData.order_id || caseData.id}</span>
               </div>
-              <div className="flex justify-between text-slate-400">
+              <div className="flex justify-between text-[#777169]">
                 <span>Payment Method</span>
-                <span className="text-slate-200 uppercase">{selectedMethod}</span>
+                <span className="text-[#44403b] uppercase font-mono">{selectedMethod}</span>
               </div>
             </div>
             <Link
               href="/"
-              className="inline-block w-full py-3 bg-slate-800 hover:bg-slate-700 text-slate-200 rounded-xl font-medium text-sm transition"
+              className="inline-block w-full py-2.5 bg-[#000000] hover:bg-[#44403b] text-[#fdfcfc] rounded-full font-medium text-xs transition-all text-center"
             >
               Back to Merchant Dashboard
             </Link>
@@ -165,48 +166,48 @@ export default function ConsumerRecoveryPage({ params }: { params: { id: string 
           <div>
             {/* Header notification */}
             <div className="mb-6">
-              <div className="inline-flex items-center space-x-1.5 px-2.5 py-1 bg-amber-500/10 border border-amber-500/20 text-amber-400 text-xs rounded-full font-medium mb-3">
-                <span className="w-1.5 h-1.5 bg-amber-400 rounded-full animate-ping"></span>
-                <span>Payment not completed</span>
+              <div className="inline-flex items-center space-x-1.5 px-3 py-1 bg-[#fdfcfc] border border-[#ebe8e4] text-[#ff4704] text-xs rounded-full font-medium mb-3">
+                <span className="w-1.5 h-1.5 bg-[#ff4704] rounded-full" />
+                <span>Payment Outstanding</span>
               </div>
-              <h1 className="text-2xl font-bold text-white tracking-tight">Complete your payment</h1>
-              <p className="text-sm text-slate-400 mt-1">
-                Your previous payment of <span className="text-slate-200 font-semibold">{formattedAmount}</span> was not charged. Complete it below with zero hassle.
+              <h1 className="text-2xl font-light text-[#000000] tracking-tight">Complete your payment</h1>
+              <p className="text-xs text-[#777169] mt-1">
+                Your previous payment attempt of <span className="text-[#000000] font-medium">{formattedAmount}</span> was not completed. Retry below securely.
               </p>
             </div>
 
             {/* Order Summary Box */}
-            <div className="bg-slate-950 border border-slate-800 rounded-xl p-4 mb-4">
-              <div className="flex justify-between items-center text-sm">
-                <span className="text-slate-400">Amount Due</span>
-                <span className="text-xl font-bold text-white">{formattedAmount}</span>
+            <div className="bg-[#fdfcfc] border border-[#ebe8e4] rounded-xl p-4 mb-4">
+              <div className="flex justify-between items-center text-xs">
+                <span className="text-[#777169]">Amount Due</span>
+                <span className="text-lg font-light text-[#000000]">{formattedAmount}</span>
               </div>
-              <div className="mt-2 pt-2 border-t border-slate-800/80 flex justify-between text-xs text-slate-400">
+              <div className="mt-2 pt-2 border-t border-[#ebe8e4] flex justify-between text-xs text-[#777169]">
                 <span>Order ID</span>
-                <span className="font-mono text-slate-300">{caseData.order_id || caseData.id}</span>
+                <span className="font-mono text-[#44403b]">{caseData.order_id || caseData.id}</span>
               </div>
               {obligationData && (
-                <div className="mt-1 flex justify-between text-xs text-slate-400">
+                <div className="mt-1 flex justify-between text-xs text-[#777169]">
                   <span>Obligation Status</span>
-                  <span className="font-mono text-blue-400">{obligationData.status}</span>
+                  <span className="font-mono text-[#000000]">{obligationData.status}</span>
                 </div>
               )}
             </div>
 
             {/* AI Recovery Action Info */}
             {latestDecision && (
-              <div className="bg-blue-950/20 border border-blue-800/40 rounded-xl p-3.5 mb-6 text-xs">
-                <div className="flex items-center space-x-2 text-blue-300 font-semibold mb-1">
-                  <span className="w-2 h-2 rounded-full bg-blue-400"></span>
+              <div className="bg-[#fdfcfc] border border-[#ebe8e4] rounded-xl p-3.5 mb-5 text-xs">
+                <div className="flex items-center space-x-1.5 text-[#000000] font-medium mb-1">
+                  <span className="w-1.5 h-1.5 rounded-full bg-[#0447ff]" />
                   <span>RecoverAI Smart Session Active</span>
                 </div>
-                <p className="text-slate-400">
+                <p className="text-[#777169] text-[11px]">
                   {latestDecision.diagnosis}
                 </p>
                 {latestDecision.recommended_action && (
-                  <div className="mt-2 text-[11px] text-slate-300">
-                    <span className="text-slate-400">Recovery Path: </span>
-                    <span className="font-mono text-emerald-400 font-medium">
+                  <div className="mt-2 text-[11px] text-[#44403b]">
+                    <span className="text-[#777169]">Recovery Path: </span>
+                    <span className="font-mono text-[#000000] font-medium">
                       {latestDecision.recommended_action.replace(/_/g, ' ')}
                     </span>
                   </div>
@@ -216,24 +217,24 @@ export default function ConsumerRecoveryPage({ params }: { params: { id: string 
 
             {/* Payment Method Selector */}
             <div className="space-y-2 mb-6">
-              <label className="text-xs font-semibold text-slate-400 uppercase tracking-wider">Choose payment option</label>
+              <label className="text-[10px] font-medium text-[#777169] uppercase tracking-wider block">Choose payment option</label>
               
               {/* UPI Option */}
               <label
                 onClick={() => setSelectedMethod('upi')}
-                className={`flex items-center justify-between p-3.5 rounded-xl border cursor-pointer transition ${
+                className={`flex items-center justify-between p-3 rounded-xl border cursor-pointer transition-all ${
                   selectedMethod === 'upi'
-                    ? 'bg-blue-600/10 border-blue-500 text-white'
-                    : 'bg-slate-950/50 border-slate-800 text-slate-300 hover:border-slate-700'
+                    ? 'bg-[#fdfcfc] border-[#000000]'
+                    : 'bg-[#fdfcfc] border-[#ebe8e4] hover:border-[#a59f97]'
                 }`}
               >
                 <div className="flex items-center space-x-3">
-                  <div className="w-8 h-8 rounded-lg bg-emerald-500/10 text-emerald-400 border border-emerald-500/20 flex items-center justify-center font-bold text-xs">
+                  <div className="w-7 h-7 rounded-full bg-[#ebe8e4] text-[#000000] flex items-center justify-center font-medium text-[10px]">
                     UPI
                   </div>
                   <div>
-                    <div className="text-sm font-medium">UPI / Instant QR</div>
-                    <div className="text-xs text-slate-400">Google Pay, PhonePe, Paytm, BHIM</div>
+                    <div className="text-xs font-medium text-[#000000]">UPI / Instant QR</div>
+                    <div className="text-[11px] text-[#777169]">Google Pay, PhonePe, Paytm, BHIM</div>
                   </div>
                 </div>
                 <input
@@ -241,26 +242,26 @@ export default function ConsumerRecoveryPage({ params }: { params: { id: string 
                   name="payment_method"
                   checked={selectedMethod === 'upi'}
                   onChange={() => setSelectedMethod('upi')}
-                  className="accent-blue-500"
+                  className="accent-[#000000]"
                 />
               </label>
 
               {/* Cards Option */}
               <label
                 onClick={() => setSelectedMethod('card')}
-                className={`flex items-center justify-between p-3.5 rounded-xl border cursor-pointer transition ${
+                className={`flex items-center justify-between p-3 rounded-xl border cursor-pointer transition-all ${
                   selectedMethod === 'card'
-                    ? 'bg-blue-600/10 border-blue-500 text-white'
-                    : 'bg-slate-950/50 border-slate-800 text-slate-300 hover:border-slate-700'
+                    ? 'bg-[#fdfcfc] border-[#000000]'
+                    : 'bg-[#fdfcfc] border-[#ebe8e4] hover:border-[#a59f97]'
                 }`}
               >
                 <div className="flex items-center space-x-3">
-                  <div className="w-8 h-8 rounded-lg bg-blue-500/10 text-blue-400 border border-blue-500/20 flex items-center justify-center font-bold text-xs">
+                  <div className="w-7 h-7 rounded-full bg-[#ebe8e4] text-[#000000] flex items-center justify-center font-medium text-[10px]">
                     CARD
                   </div>
                   <div>
-                    <div className="text-sm font-medium">Credit / Debit Card</div>
-                    <div className="text-xs text-slate-400">Visa, Mastercard, RuPay, Amex</div>
+                    <div className="text-xs font-medium text-[#000000]">Credit / Debit Card</div>
+                    <div className="text-[11px] text-[#777169]">Visa, Mastercard, RuPay</div>
                   </div>
                 </div>
                 <input
@@ -268,26 +269,26 @@ export default function ConsumerRecoveryPage({ params }: { params: { id: string 
                   name="payment_method"
                   checked={selectedMethod === 'card'}
                   onChange={() => setSelectedMethod('card')}
-                  className="accent-blue-500"
+                  className="accent-[#000000]"
                 />
               </label>
 
               {/* Netbanking Option */}
               <label
                 onClick={() => setSelectedMethod('netbanking')}
-                className={`flex items-center justify-between p-3.5 rounded-xl border cursor-pointer transition ${
+                className={`flex items-center justify-between p-3 rounded-xl border cursor-pointer transition-all ${
                   selectedMethod === 'netbanking'
-                    ? 'bg-blue-600/10 border-blue-500 text-white'
-                    : 'bg-slate-950/50 border-slate-800 text-slate-300 hover:border-slate-700'
+                    ? 'bg-[#fdfcfc] border-[#000000]'
+                    : 'bg-[#fdfcfc] border-[#ebe8e4] hover:border-[#a59f97]'
                 }`}
               >
                 <div className="flex items-center space-x-3">
-                  <div className="w-8 h-8 rounded-lg bg-purple-500/10 text-purple-400 border border-purple-500/20 flex items-center justify-center font-bold text-xs">
+                  <div className="w-7 h-7 rounded-full bg-[#ebe8e4] text-[#000000] flex items-center justify-center font-medium text-[10px]">
                     NET
                   </div>
                   <div>
-                    <div className="text-sm font-medium">Netbanking</div>
-                    <div className="text-xs text-slate-400">All Indian Banks Supported</div>
+                    <div className="text-xs font-medium text-[#000000]">Netbanking</div>
+                    <div className="text-[11px] text-[#777169]">All major Indian banks</div>
                   </div>
                 </div>
                 <input
@@ -295,7 +296,7 @@ export default function ConsumerRecoveryPage({ params }: { params: { id: string 
                   name="payment_method"
                   checked={selectedMethod === 'netbanking'}
                   onChange={() => setSelectedMethod('netbanking')}
-                  className="accent-blue-500"
+                  className="accent-[#000000]"
                 />
               </label>
             </div>
@@ -304,20 +305,20 @@ export default function ConsumerRecoveryPage({ params }: { params: { id: string 
             <button
               onClick={handleCompletePayment}
               disabled={paying}
-              className="w-full py-3.5 bg-blue-600 hover:bg-blue-500 disabled:opacity-50 text-white font-semibold rounded-xl text-sm transition shadow-lg shadow-blue-600/25 flex items-center justify-center space-x-2"
+              className="w-full py-3 bg-[#000000] hover:bg-[#44403b] disabled:opacity-50 text-[#fdfcfc] font-medium rounded-full text-xs transition-all flex items-center justify-center space-x-2"
             >
               {paying ? (
                 <>
-                  <svg className="animate-spin -ml-1 mr-2 h-4 w-4 text-white" fill="none" viewBox="0 0 24 24">
-                    <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
-                    <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8H4z"></path>
+                  <svg className="animate-spin -ml-1 mr-2 h-3.5 w-3.5 text-white" fill="none" viewBox="0 0 24 24">
+                    <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
+                    <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8H4z" />
                   </svg>
                   <span>Verifying payment...</span>
                 </>
               ) : (
                 <>
                   <span>Pay {formattedAmount} Now</span>
-                  <svg className="w-4 h-4 ml-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <svg className="w-3.5 h-3.5 ml-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M14 5l7 7m0 0l-7 7m7-7H3" />
                   </svg>
                 </>
@@ -325,7 +326,7 @@ export default function ConsumerRecoveryPage({ params }: { params: { id: string 
             </button>
 
             <div className="mt-4 text-center">
-              <p className="text-[11px] text-slate-400">
+              <p className="text-[10px] text-[#777169]">
                 Powered by Razorpay Payments Infrastructure. 100% Secure & PCI-DSS Compliant.
               </p>
             </div>
@@ -333,8 +334,8 @@ export default function ConsumerRecoveryPage({ params }: { params: { id: string 
         )}
       </div>
 
-      <div className="mt-8 text-center text-xs text-slate-400">
-        <Link href="/" className="hover:text-slate-400 transition underline underline-offset-4">
+      <div className="mt-8 text-center text-xs text-[#777169]">
+        <Link href="/" className="hover:text-[#000000] transition-colors">
           Merchant Operator Portal
         </Link>
       </div>

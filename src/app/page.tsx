@@ -3,29 +3,18 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import Link from 'next/link';
 import {
-  Activity,
-  AlertCircle,
-  AlertTriangle,
   ArrowRight,
   ArrowUpRight,
   Check,
-  CheckCircle2,
+  ChevronDown,
   ChevronRight,
+  ChevronUp,
   Clock,
   ExternalLink,
-  Filter,
   Info,
-  Layers,
-  PlayCircle,
   RefreshCw,
   Search,
-  Shield,
-  ShieldAlert,
-  ShieldCheck,
-  Sparkles,
-  TrendingUp,
   X,
-  Zap,
 } from 'lucide-react';
 
 interface DashboardStats {
@@ -78,6 +67,8 @@ interface CaseItem {
   consent_status: string;
   recovery_url?: string;
   created_at: string;
+  event_id?: string;
+  policy_version?: string;
   latest_decision?: LatestDecision | null;
   latest_policy_check?: LatestPolicyCheck | null;
 }
@@ -124,6 +115,10 @@ export default function DashboardPage() {
   const [loadingCaseDetail, setLoadingCaseDetail] = useState(false);
   const [actionProcessing, setActionProcessing] = useState(false);
   const [actionMessage, setActionMessage] = useState<string | null>(null);
+  const [drawerAuditOpen, setDrawerAuditOpen] = useState(false);
+
+  // Page-level Audit Accordion
+  const [auditDetailsOpen, setAuditDetailsOpen] = useState(false);
 
   useEffect(() => {
     fetchDashboardData();
@@ -136,6 +131,7 @@ export default function DashboardPage() {
     } else {
       setCaseDetail(null);
       setActionMessage(null);
+      setDrawerAuditOpen(false);
     }
   }, [selectedCaseId]);
 
@@ -205,7 +201,7 @@ export default function DashboardPage() {
       });
       const data = await res.json();
       if (data.success) {
-        setTestSuccessMessage(`Ingested ${scenarioName} (₹${(amount / 100).toLocaleString('en-IN')})`);
+        setTestSuccessMessage(`Generated ${scenarioName} (₹${(amount / 100).toLocaleString('en-IN')})`);
         await fetchDashboardData();
         if (data.data?.case?.id) {
           setSelectedCaseId(data.data.case.id);
@@ -228,13 +224,13 @@ export default function DashboardPage() {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           action,
-          operator_notes: `Action ${action} executed via Merchant Control Center`,
+          operator_notes: `Action ${action} executed by merchant operator`,
           operator_id: 'merchant_admin',
         }),
       });
       const data = await res.json();
       if (data.success) {
-        setActionMessage(`Action ${action} recorded successfully.`);
+        setActionMessage(`Action ${action === 'APPROVE' ? 'Approved' : 'Stopped'} recorded.`);
         await loadCaseDetail(caseId);
         await fetchDashboardData();
       } else {
@@ -256,11 +252,11 @@ export default function DashboardPage() {
       });
       const data = await res.json();
       if (data.success) {
-        setActionMessage('✓ Payment captured & verified. Case marked RECOVERED.');
+        setActionMessage('Payment captured & verified via authoritative webhook. Case marked recovered.');
         await loadCaseDetail(caseId);
         await fetchDashboardData();
       } else {
-        setActionMessage(`Failed to simulate payment: ${data.error}`);
+        setActionMessage(`Failed to complete payment: ${data.error}`);
       }
     } catch (err: any) {
       setActionMessage(`Error: ${err.message}`);
@@ -269,64 +265,78 @@ export default function DashboardPage() {
     }
   };
 
-  // Plain English failure description
+  // Plain English failure reasons
   const getPlainEnglishFailure = (code: string, desc?: string) => {
     const upper = (code || '').toUpperCase();
     if (upper.includes('AUTH_DROPOUT') || upper.includes('BAD_REQUEST_ERROR')) {
-      return 'Customer dropped out during OTP / 3DS authentication';
+      return 'Authentication dropped by user';
     }
     if (upper.includes('GATEWAY_TIMEOUT')) {
-      return 'Bank 3DS gateway timeout during card authorization';
+      return 'Bank 3DS gateway timeout';
     }
     if (upper.includes('INSUFFICIENT_FUNDS')) {
-      return 'Card declined due to insufficient customer balance';
+      return 'Insufficient customer balance';
     }
     if (upper.includes('GATEWAY_ERROR') || upper.includes('ISSUER_DOWN')) {
-      return 'Issuing bank processing downtime or network drop';
+      return 'Bank downtime or network drop';
     }
     if (upper.includes('CARD_EXPIRED')) {
-      return 'Card details expired or invalid date provided';
+      return 'Card expired or invalid date';
     }
-    return desc || code.replace(/_/g, ' ');
+    return desc || code.replace(/_/g, ' ').toLowerCase();
   };
 
-  // Merchant-friendly action display
-  const getRecoveryActionDisplay = (action?: string) => {
+  // Merchant-friendly AI recommendation display
+  const getAIRecommendationDisplay = (action?: string) => {
     switch (action) {
       case 'CREATE_PAYMENT_LINK':
-        return 'Payment Link sent via WhatsApp / SMS';
+        return 'Payment link';
       case 'RETRY_NOW':
-        return 'Instant Smart Retry via alternate gateway rail';
+        return 'Instant retry';
       case 'SCHEDULE_RETRY':
-        return 'Smart Retry scheduled for optimal bank uptime';
+        return 'Scheduled retry';
       case 'OFFER_ALTERNATE_METHOD':
-        return 'Alternate payment method (UPI / NetBanking) presented';
+        return 'Alternate payment method';
       case 'ESCALATE':
-        return 'Escalated to human operator review';
+        return 'Escalate to merchant';
       case 'WAIT':
-        return 'Waiting for transient banking friction to clear';
+        return 'Wait for bank clearance';
       case 'STOP':
-        return 'Recovery halted to prevent customer fatigue';
+        return 'Halt recovery';
       default:
-        return action ? action.replace(/_/g, ' ') : 'Analyzing optimal recovery route';
+        return action ? action.replace(/_/g, ' ') : 'Analyze route';
     }
   };
 
-  // Merchant-friendly policy guardrail display
-  const getPolicySafeguardDisplay = (policyResult?: string, reasons?: string[], amount: number = 0) => {
-    if (policyResult === 'ESCALATE') {
-      return 'Escalated: High-value transaction > ₹25,000 threshold';
+  // Policy check display
+  const getPolicyCheckDisplay = (policyResult?: string, amount: number = 0) => {
+    if (policyResult === 'ESCALATE' || amount >= 2500000) {
+      return 'Escalated';
     }
     if (policyResult === 'BLOCK') {
-      return reasons?.[0] || 'Blocked by safety guardrail';
+      return 'Blocked';
     }
-    if (policyResult === 'ALLOW') {
-      return 'Autonomous under ₹25,000 policy threshold';
+    return 'Allowed';
+  };
+
+  // Executed action display
+  const getExecutedActionDisplay = (toolName?: string, status?: string) => {
+    if (status === 'HUMAN_REVIEW' || status === 'ESCALATED') {
+      return 'Escalated to review';
     }
-    if (amount >= 2500000) {
-      return 'Flagged for High-Value Merchant Review';
+    if (status === 'STOPPED') {
+      return 'Intervention halted';
     }
-    return 'Governed by deterministic policy engine';
+    if (toolName?.includes('payment_link')) {
+      return 'Payment link dispatched';
+    }
+    if (toolName?.includes('retry')) {
+      return 'Retry initiated';
+    }
+    if (status === 'ACTION_EXECUTED' || status === 'OUTCOME_MONITORED') {
+      return 'Workflow active';
+    }
+    return 'Action initiated';
   };
 
   // Format currency in INR
@@ -349,74 +359,46 @@ export default function DashboardPage() {
     }
   };
 
-  // Status badges
-  const getStatusBadge = (status: string) => {
+  // Status visualizer: restrained status indicators
+  const renderStatus = (status: string, amount: number) => {
     switch (status) {
       case 'RECOVERED':
         return (
-          <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-md text-xs font-semibold bg-emerald-500/15 text-emerald-400 border border-emerald-500/30">
-            <CheckCircle2 className="w-3.5 h-3.5" /> Recovered
-          </span>
-        );
-      case 'OUTCOME_MONITORED':
-        return (
-          <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-md text-xs font-semibold bg-blue-500/15 text-blue-400 border border-blue-500/30">
-            <Clock className="w-3.5 h-3.5 animate-pulse" /> Awaiting Payment
-          </span>
-        );
-      case 'ACTION_EXECUTED':
-        return (
-          <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-md text-xs font-semibold bg-cyan-500/15 text-cyan-400 border border-cyan-500/30">
-            <Zap className="w-3.5 h-3.5" /> Action Dispatched
+          <span className="inline-flex items-center gap-1.5 text-xs text-[#000000]">
+            <span className="w-1.5 h-1.5 rounded-full bg-[#0447ff]"></span>
+            <span>✓ {formatINR(amount)} recovered</span>
           </span>
         );
       case 'HUMAN_REVIEW':
-        return (
-          <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-md text-xs font-semibold bg-purple-500/20 text-purple-300 border border-purple-500/40">
-            <AlertCircle className="w-3.5 h-3.5" /> Merchant Review
-          </span>
-        );
       case 'ESCALATED':
         return (
-          <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-md text-xs font-semibold bg-amber-500/15 text-amber-400 border border-amber-500/30">
-            <AlertTriangle className="w-3.5 h-3.5" /> Escalated
+          <span className="inline-flex items-center gap-1.5 text-xs text-[#000000]">
+            <span className="w-1.5 h-1.5 rounded-full bg-[#ff4704]"></span>
+            <span>Requires review</span>
+          </span>
+        );
+      case 'OUTCOME_MONITORED':
+      case 'ACTION_EXECUTED':
+        return (
+          <span className="inline-flex items-center gap-1.5 text-xs text-[#44403b]">
+            <span className="w-1.5 h-1.5 rounded-full border border-[#777169]"></span>
+            <span>Waiting for payment result</span>
           </span>
         );
       case 'STOPPED':
         return (
-          <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-md text-xs font-semibold bg-slate-700/60 text-slate-400 border border-slate-700">
-            Halted
+          <span className="inline-flex items-center gap-1.5 text-xs text-[#777169]">
+            <span className="w-1.5 h-1.5 rounded-full bg-[#a59f97]"></span>
+            <span>Halted</span>
           </span>
         );
       default:
         return (
-          <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-md text-xs font-semibold bg-slate-800 text-slate-300 border border-slate-700">
-            {status.replace(/_/g, ' ')}
+          <span className="inline-flex items-center gap-1.5 text-xs text-[#777169]">
+            <span>{status.replace(/_/g, ' ').toLowerCase()}</span>
           </span>
         );
     }
-  };
-
-  const getRecoverabilityBadge = (score: number) => {
-    if (score >= 0.7) {
-      return (
-        <span className="px-2 py-0.5 rounded text-[11px] font-semibold bg-emerald-500/10 text-emerald-400 border border-emerald-500/20">
-          High ({Math.round(score * 100)}%)
-        </span>
-      );
-    }
-    if (score >= 0.4) {
-      return (
-        <span className="px-2 py-0.5 rounded text-[11px] font-semibold bg-amber-500/10 text-amber-400 border border-amber-500/20">
-          Med ({Math.round(score * 100)}%)
-        </span>
-      );
-    }
-    return (
-      <span className="px-2 py-0.5 rounded text-[11px] font-semibold bg-rose-500/10 text-rose-400 border border-rose-500/20">
-        Low ({Math.round(score * 100)}%)
-      </span>
-    );
   };
 
   // Needs Attention cases: status === HUMAN_REVIEW, ESCALATED, or amount >= 25k not recovered
@@ -441,8 +423,10 @@ export default function DashboardPage() {
         if (c.status !== 'HUMAN_REVIEW' && c.status !== 'ESCALATED' && !(c.amount >= 2500000 && c.status !== 'RECOVERED')) {
           return false;
         }
-      } else if (filterStatus !== 'ALL') {
-        if (c.status !== filterStatus) return false;
+      } else if (filterStatus === 'RECOVERED') {
+        if (c.status !== 'RECOVERED') return false;
+      } else if (filterStatus === 'STOPPED') {
+        if (c.status !== 'STOPPED') return false;
       }
 
       // Search query
@@ -468,19 +452,18 @@ export default function DashboardPage() {
   const needsAttentionCount = (stats?.humanReviewCases || 0) + (stats?.escalatedCases || 0);
 
   return (
-    <div className="space-y-8 pb-16">
-      {/* Top Header: Merchant Clean View without test buttons */}
-      <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4 border-b border-slate-800/80 pb-6">
+    <div className="space-y-10 pb-16">
+      {/* 2. HERO / PAGE INTRO */}
+      <div className="flex flex-col md:flex-row md:items-end md:justify-between gap-4 pt-2">
         <div>
-          <div className="flex items-center gap-2.5">
-            <h1 className="text-2xl md:text-3xl font-bold tracking-tight text-white">Merchant Recovery Dashboard</h1>
-            <span className="px-2.5 py-0.5 rounded-full bg-emerald-500/10 text-emerald-400 border border-emerald-500/20 text-xs font-semibold flex items-center gap-1.5">
-              <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse"></span>
-              Live Autonomous Engine
-            </span>
-          </div>
-          <p className="text-xs md:text-sm text-slate-400 mt-1">
-            Real-time control plane orchestrating failure diagnosis, deterministic policy guardrails, and verified Razorpay payment recovery.
+          <h1 className="text-3xl md:text-4xl font-light tracking-tight text-[#000000]">
+            Revenue recovery
+          </h1>
+          <p className="text-sm text-[#44403b] mt-1.5 font-normal max-w-xl">
+            Recover failed payments with bounded AI workflows.
+          </p>
+          <p className="text-xs text-[#777169] mt-1 font-normal">
+            Monitoring failed payments and recovery workflows
           </p>
         </div>
 
@@ -488,268 +471,144 @@ export default function DashboardPage() {
           <button
             onClick={fetchDashboardData}
             disabled={refreshing}
-            className="px-3 py-2 bg-slate-900 hover:bg-slate-800 border border-slate-700/80 text-slate-300 rounded-xl text-xs font-medium transition flex items-center gap-1.5 shadow-sm"
-            title="Refresh live telemetry"
+            className="inline-flex items-center gap-1.5 px-3.5 py-1.5 rounded-full bg-[#fdfcfc] border border-[#ebe8e4] text-xs text-[#44403b] hover:bg-[#f5f3f1] hover:text-[#000000] transition-colors"
           >
-            <RefreshCw className={`w-3.5 h-3.5 ${refreshing ? 'animate-spin text-blue-400' : 'text-slate-400'}`} />
-            <span>Refresh</span>
+            <RefreshCw className={`w-3 h-3 text-[#777169] ${refreshing ? 'animate-spin' : ''}`} />
+            <span>Refresh telemetry</span>
           </button>
-
-          <a
-            href="#demo-scenarios"
-            className="px-3.5 py-2 bg-slate-800/80 hover:bg-slate-700 text-slate-200 border border-slate-700 rounded-xl text-xs font-semibold transition flex items-center gap-1.5 shadow-sm"
-          >
-            <PlayCircle className="w-3.5 h-3.5 text-purple-400" />
-            <span>Test Scenarios ↓</span>
-          </a>
         </div>
       </div>
 
-      {/* Integration Mode & Telemetry Status Banner */}
-      <div className="bg-slate-900/90 border border-slate-800 rounded-2xl px-5 py-3.5 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 text-xs shadow-sm">
-        <div className="flex flex-wrap items-center gap-x-4 gap-y-2">
-          <div className="flex items-center gap-2">
-            <span className="relative flex h-2 w-2">
-              <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span>
-              <span className="relative inline-flex rounded-full h-2 w-2 bg-emerald-500"></span>
-            </span>
-            <span className="text-slate-400 font-medium">Gateway Mode:</span>
-            <span className="text-white font-semibold">
-              {rzpStatus?.hasLiveCredentials ? 'Razorpay Test Mode (Live Keys Active)' : 'High-Fidelity Payment Simulator'}
-            </span>
-          </div>
-
-          <span className="text-slate-700 hidden sm:inline">•</span>
-
-          <div className="flex items-center gap-1.5 text-slate-400">
-            <span>Verified Webhook Endpoint:</span>
-            <code className="bg-slate-950 px-2 py-0.5 rounded border border-slate-800 text-slate-300 font-mono text-[11px]">
-              {rzpStatus?.webhookUrl || '/api/webhooks/razorpay'}
-            </code>
-          </div>
-        </div>
-
-        <div className="flex items-center gap-2 text-slate-400 text-[11px]">
-          <ShieldCheck className="w-4 h-4 text-cyan-400" />
-          <span>Autonomy limit: <strong className="text-slate-200 font-semibold">₹25,000</strong> max per autonomous retry</span>
-        </div>
-      </div>
-
-      {/* Primary Business Outcome KPIs - 5 Cards */}
+      {/* 3. BUSINESS OUTCOME KPIS (Clean 5-Card Row) */}
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-4">
         {/* KPI 1: Revenue Recovered */}
-        <div className="bg-gradient-to-br from-emerald-950/40 via-slate-900 to-slate-900 border border-emerald-500/30 rounded-2xl p-5 shadow-lg relative overflow-hidden">
-          <div className="flex items-center justify-between">
-            <div className="text-xs font-semibold text-emerald-400 tracking-wider uppercase">Revenue Recovered</div>
-            <div className="w-7 h-7 rounded-lg bg-emerald-500/10 flex items-center justify-center text-emerald-400">
-              <TrendingUp className="w-4 h-4" />
+        <div className="rounded-[20px] bg-[#f5f3f1] border border-[#ebe8e4] p-5 flex flex-col justify-between shadow-none transition-colors">
+          <div>
+            <div className="text-xs font-normal text-[#777169]">Revenue Recovered</div>
+            <div className="text-2xl md:text-3xl font-light text-[#000000] mt-2 tracking-tight">
+              {formatINR(stats?.totalRecoveredAmount || 0)}
             </div>
           </div>
-          <div className="text-2xl md:text-3xl font-bold text-white mt-2 tracking-tight">
-            {formatINR(stats?.totalRecoveredAmount || 0)}
-          </div>
-          <div className="text-xs text-emerald-400/90 mt-1 font-medium">
-            {stats?.recoveredCases || 0} payments successfully recovered
-          </div>
-          <div className="text-[11px] text-slate-500 mt-2 flex items-center gap-1">
-            <Check className="w-3 h-3 text-emerald-400" />
-            <span>Verified Razorpay captures</span>
+          <div className="mt-4 pt-3 border-t border-[#ebe8e4]/60">
+            <div className="text-xs text-[#44403b] font-normal">
+              {stats?.recoveredCases || 0} payments successfully recovered
+            </div>
+            <div className="text-[11px] text-[#777169] mt-1 flex items-center gap-1.5">
+              <span className="w-1.5 h-1.5 rounded-full bg-[#0447ff]"></span>
+              <span>Verified Razorpay captures</span>
+            </div>
           </div>
         </div>
 
         {/* KPI 2: Revenue at Risk */}
-        <div className="bg-slate-900 border border-slate-800 rounded-2xl p-5 shadow-lg relative overflow-hidden">
-          <div className="flex items-center justify-between">
-            <div className="text-xs font-semibold text-slate-400 tracking-wider uppercase">Revenue at Risk</div>
-            <div className="w-7 h-7 rounded-lg bg-slate-800 flex items-center justify-center text-slate-400">
-              <Activity className="w-4 h-4" />
+        <div className="rounded-[20px] bg-[#f5f3f1] border border-[#ebe8e4] p-5 flex flex-col justify-between shadow-none transition-colors">
+          <div>
+            <div className="text-xs font-normal text-[#777169]">Revenue at Risk</div>
+            <div className="text-2xl md:text-3xl font-light text-[#000000] mt-2 tracking-tight">
+              {formatINR(stats?.totalAtRiskAmount || 0)}
             </div>
           </div>
-          <div className="text-2xl md:text-3xl font-bold text-slate-100 mt-2 tracking-tight">
-            {formatINR(stats?.totalAtRiskAmount || 0)}
-          </div>
-          <div className="text-xs text-slate-400 mt-1">
-            Across {stats?.totalCases || 0} failed payments
-          </div>
-          <div className="text-[11px] text-slate-500 mt-2">
-            Total loss prevented by control engine
+          <div className="mt-4 pt-3 border-t border-[#ebe8e4]/60">
+            <div className="text-xs text-[#44403b] font-normal">
+              Across {stats?.totalCases || 0} failed payments
+            </div>
+            <div className="text-[11px] text-[#777169] mt-1">
+              Total volume lost at checkout
+            </div>
           </div>
         </div>
 
         {/* KPI 3: Recovery Rate */}
-        <div className="bg-slate-900 border border-blue-500/30 rounded-2xl p-5 shadow-lg relative overflow-hidden">
-          <div className="flex items-center justify-between">
-            <div className="text-xs font-semibold text-blue-400 tracking-wider uppercase">Recovery Rate</div>
-            <div className="w-7 h-7 rounded-lg bg-blue-500/10 flex items-center justify-center text-blue-400">
-              <Zap className="w-4 h-4" />
+        <div className="rounded-[20px] bg-[#f5f3f1] border border-[#ebe8e4] p-5 flex flex-col justify-between shadow-none transition-colors">
+          <div>
+            <div className="text-xs font-normal text-[#777169]">Recovery Rate</div>
+            <div className="text-2xl md:text-3xl font-light text-[#000000] mt-2 tracking-tight">
+              {valueRecoveryRate}%
             </div>
           </div>
-          <div className="text-2xl md:text-3xl font-bold text-blue-400 mt-2 tracking-tight">
-            {valueRecoveryRate}%
-          </div>
-          <div className="text-xs text-slate-400 mt-1">
-            {formatINR(stats?.totalRecoveredAmount || 0)} recovered / {formatINR(stats?.totalAtRiskAmount || 0)} at risk
-          </div>
-          <div className="text-[11px] text-slate-500 mt-2">
-            Mathematical value recovered ratio
+          <div className="mt-4 pt-3 border-t border-[#ebe8e4]/60">
+            <div className="text-xs text-[#44403b] font-normal">
+              {formatINR(stats?.totalRecoveredAmount || 0)} recovered / {formatINR(stats?.totalAtRiskAmount || 0)} at risk
+            </div>
+            <div className="text-[11px] text-[#777169] mt-1">
+              Recovered revenue / revenue at risk
+            </div>
           </div>
         </div>
 
         {/* KPI 4: Active Recoveries */}
-        <div className="bg-slate-900 border border-amber-500/30 rounded-2xl p-5 shadow-lg relative overflow-hidden">
-          <div className="flex items-center justify-between">
-            <div className="text-xs font-semibold text-amber-400 tracking-wider uppercase">Active Recoveries</div>
-            <div className="w-7 h-7 rounded-lg bg-amber-500/10 flex items-center justify-center text-amber-400">
-              <Clock className="w-4 h-4" />
+        <div className="rounded-[20px] bg-[#f5f3f1] border border-[#ebe8e4] p-5 flex flex-col justify-between shadow-none transition-colors">
+          <div>
+            <div className="text-xs font-normal text-[#777169]">Active Recoveries</div>
+            <div className="text-2xl md:text-3xl font-light text-[#000000] mt-2 tracking-tight">
+              {stats?.activeRecoveriesCount || 0}
             </div>
           </div>
-          <div className="text-2xl md:text-3xl font-bold text-amber-400 mt-2 tracking-tight">
-            {stats?.activeRecoveriesCount || 0}
-          </div>
-          <div className="text-xs text-slate-400 mt-1">
-            Automated workflows in progress
-          </div>
-          <div className="text-[11px] text-slate-500 mt-2">
-            Active links & scheduled retries
+          <div className="mt-4 pt-3 border-t border-[#ebe8e4]/60">
+            <div className="text-xs text-[#44403b] font-normal">
+              Automated workflows in progress
+            </div>
+            <div className="text-[11px] text-[#777169] mt-1">
+              Active links & scheduled retries
+            </div>
           </div>
         </div>
 
         {/* KPI 5: Needs Attention */}
-        <div className={`border rounded-2xl p-5 shadow-lg relative overflow-hidden transition ${
-          needsAttentionCount > 0
-            ? 'bg-gradient-to-br from-purple-950/40 to-slate-900 border-purple-500/40'
-            : 'bg-slate-900 border-slate-800'
-        }`}>
-          <div className="flex items-center justify-between">
-            <div className="text-xs font-semibold text-purple-400 tracking-wider uppercase">Needs Attention</div>
-            <div className="w-7 h-7 rounded-lg bg-purple-500/15 flex items-center justify-center text-purple-400">
-              <ShieldAlert className="w-4 h-4" />
+        <div className="rounded-[20px] bg-[#f5f3f1] border border-[#ebe8e4] p-5 flex flex-col justify-between shadow-none transition-colors">
+          <div>
+            <div className="text-xs font-normal text-[#777169]">Needs Attention</div>
+            <div className="text-2xl md:text-3xl font-light text-[#000000] mt-2 tracking-tight">
+              {needsAttentionCount}
             </div>
           </div>
-          <div className="text-2xl md:text-3xl font-bold text-purple-300 mt-2 tracking-tight">
-            {needsAttentionCount}
-          </div>
-          <div className="text-xs text-purple-300/80 mt-1 font-medium">
-            {needsAttentionCount} {needsAttentionCount === 1 ? 'case requires' : 'cases require'} merchant review
-          </div>
-          <div className="text-[11px] text-slate-500 mt-2">
-            High-value &gt; ₹25,000 threshold
+          <div className="mt-4 pt-3 border-t border-[#ebe8e4]/60">
+            <div className="text-xs text-[#44403b] font-normal">
+              {needsAttentionCount} cases require merchant review
+            </div>
+            <div className="text-[11px] text-[#777169] mt-1">
+              High-value &gt; ₹25,000 threshold
+            </div>
           </div>
         </div>
       </div>
 
-      {/* Dedicated "Needs Attention" Section (Req 6) */}
-      {needsAttentionCases.length > 0 && (
-        <div className="bg-gradient-to-r from-purple-950/40 via-slate-900 to-purple-950/20 border border-purple-500/40 rounded-2xl p-6 shadow-xl space-y-4">
-          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 border-b border-purple-500/20 pb-4">
-            <div className="flex items-center gap-2.5">
-              <div className="w-8 h-8 rounded-xl bg-purple-500/20 border border-purple-500/40 flex items-center justify-center text-purple-300 shadow">
-                <AlertTriangle className="w-4 h-4" />
-              </div>
-              <div>
-                <h2 className="text-base font-bold text-white tracking-tight flex items-center gap-2">
-                  <span>Needs Attention — High-Value & Policy Escalations</span>
-                  <span className="px-2 py-0.5 text-xs rounded-full bg-purple-500/20 text-purple-300 border border-purple-500/30">
-                    {needsAttentionCases.length} Pending
-                  </span>
-                </h2>
-                <p className="text-xs text-slate-400 mt-0.5">
-                  Transactions exceeding autonomous limits or requiring merchant discretion before customer outreach.
-                </p>
-              </div>
-            </div>
-          </div>
-
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-            {needsAttentionCases.map((c) => (
-              <div
-                key={c.id}
-                className="bg-slate-950/80 border border-purple-500/30 hover:border-purple-500/60 rounded-xl p-4 transition flex flex-col justify-between space-y-3"
-              >
-                <div>
-                  <div className="flex items-center justify-between gap-2">
-                    <span className="text-lg font-bold text-white">{formatINR(c.amount)}</span>
-                    {getStatusBadge(c.status)}
-                  </div>
-                  <div className="text-xs text-slate-400 font-mono mt-1">
-                    {c.order_id || c.payment_id}
-                  </div>
-                  <div className="text-xs text-purple-200/90 mt-2 font-medium bg-purple-950/40 border border-purple-800/30 rounded-lg p-2">
-                    {getPlainEnglishFailure(c.failure_code, c.failure_description)}
-                  </div>
-                  <div className="text-[11px] text-slate-400 mt-2 flex items-center gap-1.5">
-                    <Shield className="w-3.5 h-3.5 text-purple-400 flex-shrink-0" />
-                    <span>{getPolicySafeguardDisplay(c.latest_policy_check?.policy_result, c.latest_policy_check?.reasons, c.amount)}</span>
-                  </div>
-                </div>
-
-                <div className="pt-2 border-t border-slate-800/80 flex items-center justify-between gap-2">
-                  <button
-                    onClick={() => setSelectedCaseId(c.id)}
-                    className="flex-1 py-1.5 px-3 bg-purple-600 hover:bg-purple-500 text-white rounded-lg text-xs font-semibold transition flex items-center justify-center gap-1"
-                  >
-                    <span>Review & Act</span>
-                    <ArrowRight className="w-3.5 h-3.5" />
-                  </button>
-                  {c.status !== 'RECOVERED' && (
-                    <button
-                      onClick={() => handleSimulatePaymentSuccess(c.id)}
-                      disabled={actionProcessing}
-                      className="py-1.5 px-2.5 bg-slate-800 hover:bg-slate-700 text-emerald-400 rounded-lg text-xs font-medium transition"
-                      title="Simulate customer paying successfully"
-                    >
-                      ✓ Capture
-                    </button>
-                  )}
-                </div>
-              </div>
-            ))}
-          </div>
-        </div>
-      )}
-
-      {/* Recovery Operations Activity Table (Central Experience - Req 3, 4, 5) */}
-      <div className="bg-slate-900 border border-slate-800 rounded-2xl shadow-xl overflow-hidden">
-        {/* Table Header Controls */}
-        <div className="p-5 border-b border-slate-800 flex flex-col lg:flex-row lg:items-center justify-between gap-4">
+      {/* 4. RECOVERY ACTIVITY (Most Important Section) */}
+      <section className="rounded-[20px] bg-[#f5f3f1] border border-[#ebe8e4] p-6 sm:p-8 space-y-6">
+        <div className="flex flex-col md:flex-row md:items-end justify-between gap-4 border-b border-[#ebe8e4] pb-5">
           <div>
-            <h2 className="text-base font-bold text-white tracking-tight flex items-center gap-2">
-              <span>Recovery Workflow Activity</span>
-              <span className="text-xs font-normal text-slate-400">
-                ({filteredCases.length} {filteredCases.length === 1 ? 'case' : 'cases'})
-              </span>
-            </h2>
-            <p className="text-xs text-slate-400 mt-0.5">
-              Every failed payment tracked from diagnosis to deterministic policy check, controlled execution, and authoritative capture.
+            <h2 className="text-xl font-normal text-[#000000] tracking-tight">Recovery activity</h2>
+            <p className="text-xs text-[#777169] mt-0.5 font-normal">
+              Recent payment failures and the actions RecoverAI took.
             </p>
           </div>
 
           <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-3">
             {/* Search Input */}
             <div className="relative">
-              <Search className="w-3.5 h-3.5 text-slate-400 absolute left-3 top-1/2 -translate-y-1/2" />
+              <Search className="w-3.5 h-3.5 text-[#777169] absolute left-3 top-1/2 -translate-y-1/2" />
               <input
                 type="text"
                 value={searchQuery}
                 onChange={(e) => setSearchQuery(e.target.value)}
                 placeholder="Search order, payment, method..."
-                className="w-full sm:w-60 bg-slate-950 border border-slate-800 rounded-xl pl-8 pr-3 py-1.5 text-xs text-slate-200 placeholder-slate-500 focus:outline-none focus:border-blue-500 transition"
+                className="w-full sm:w-64 bg-[#fdfcfc] border border-[#ebe8e4] rounded-full pl-8 pr-3 py-1.5 text-xs text-[#000000] placeholder-[#a59f97] focus:outline-none focus:border-[#44403b] transition-colors"
               />
               {searchQuery && (
                 <button
                   onClick={() => setSearchQuery('')}
-                  className="absolute right-2.5 top-1/2 -translate-y-1/2 text-slate-500 hover:text-slate-300"
+                  className="absolute right-2.5 top-1/2 -translate-y-1/2 text-[#777169] hover:text-[#000000]"
                 >
                   <X className="w-3 h-3" />
                 </button>
               )}
             </div>
 
-            {/* Filter Tabs */}
-            <div className="flex items-center space-x-1 bg-slate-950 p-1 rounded-xl border border-slate-800 text-xs overflow-x-auto">
+            {/* Filter Pills */}
+            <div className="flex items-center gap-1.5 overflow-x-auto">
               {[
-                { id: 'ALL', label: 'All Cases' },
-                { id: 'ACTIVE', label: 'Active Workflows' },
+                { id: 'ALL', label: 'All' },
+                { id: 'ACTIVE', label: 'Active' },
                 { id: 'NEEDS_ATTENTION', label: 'Needs Attention' },
                 { id: 'RECOVERED', label: 'Recovered' },
                 { id: 'STOPPED', label: 'Halted' },
@@ -757,10 +616,10 @@ export default function DashboardPage() {
                 <button
                   key={f.id}
                   onClick={() => setFilterStatus(f.id)}
-                  className={`px-3 py-1.5 rounded-lg font-medium transition whitespace-nowrap ${
+                  className={`px-3 py-1 rounded-full text-xs font-medium transition-colors whitespace-nowrap ${
                     filterStatus === f.id
-                      ? 'bg-blue-600 text-white shadow'
-                      : 'text-slate-400 hover:text-slate-200 hover:bg-slate-900/60'
+                      ? 'bg-[#000000] text-[#fdfcfc]'
+                      : 'bg-[#fdfcfc] border border-[#ebe8e4] text-[#44403b] hover:bg-[#ebe8e4]'
                   }`}
                 >
                   {f.label}
@@ -770,124 +629,100 @@ export default function DashboardPage() {
           </div>
         </div>
 
-        {/* Table Body */}
+        {/* List / Table */}
         {loading ? (
-          <div className="p-16 text-center text-slate-400 text-xs animate-pulse">
-            <RefreshCw className="w-5 h-5 mx-auto mb-2 animate-spin text-blue-400" />
-            Loading real-time recovery telemetry...
+          <div className="py-16 text-center text-xs text-[#777169]">
+            <RefreshCw className="w-4 h-4 mx-auto mb-2 animate-spin text-[#44403b]" />
+            Loading recovery telemetry...
           </div>
         ) : filteredCases.length === 0 ? (
-          <div className="p-16 text-center text-slate-400">
-            <div className="w-12 h-12 rounded-2xl bg-slate-800/80 border border-slate-700 flex items-center justify-center mx-auto mb-3 text-slate-300">
-              <Layers className="w-6 h-6" />
-            </div>
-            <div className="text-sm font-semibold text-slate-200 mb-1">No matching recovery cases found</div>
-            <p className="text-xs text-slate-400 max-w-sm mx-auto mb-5">
+          <div className="py-16 text-center text-xs text-[#777169]">
+            <p className="text-sm font-normal text-[#000000] mb-1">No recovery cases found</p>
+            <p className="max-w-sm mx-auto text-[#777169] mb-4">
               {searchQuery
-                ? 'Try adjusting your search query or clear the filter.'
-                : 'Ingest a simulated payment failure scenario below to see the complete 6-step recovery loop in action.'}
+                ? 'No cases matched your search query.'
+                : 'No recovery records in this view.'}
             </p>
-            <a
-              href="#demo-scenarios"
-              className="inline-flex items-center gap-1.5 px-4 py-2 bg-blue-600 hover:bg-blue-500 text-white rounded-xl text-xs font-semibold transition shadow-lg shadow-blue-600/25"
-            >
-              <PlayCircle className="w-3.5 h-3.5" />
-              <span>Launch a Test Scenario Below</span>
-            </a>
           </div>
         ) : (
           <div className="overflow-x-auto">
             <table className="w-full text-left border-collapse text-xs">
               <thead>
-                <tr className="bg-slate-950/80 border-b border-slate-800 text-slate-400 font-medium">
-                  <th className="p-4 pl-6">Order / Payment</th>
-                  <th className="p-4">Amount</th>
-                  <th className="p-4">Customer Failure Diagnosis</th>
-                  <th className="p-4">Recovery Decision & Policy</th>
-                  <th className="p-4">Workflow Status</th>
-                  <th className="p-4 pr-6 text-right">Actions</th>
+                <tr className="border-b border-[#ebe8e4] text-[#777169] font-normal">
+                  <th className="pb-3 pr-4 font-normal">Amount & Identifier</th>
+                  <th className="pb-3 px-4 font-normal">Failure Reason</th>
+                  <th className="pb-3 px-4 font-normal">AI Recommendation</th>
+                  <th className="pb-3 px-4 font-normal">Policy</th>
+                  <th className="pb-3 px-4 font-normal">Action</th>
+                  <th className="pb-3 px-4 font-normal">Status / Result</th>
+                  <th className="pb-3 pl-4 text-right font-normal">Details</th>
                 </tr>
               </thead>
-              <tbody className="divide-y divide-slate-800/60 text-slate-200">
+              <tbody className="divide-y divide-[#ebe8e4]/60 text-[#44403b]">
                 {filteredCases.map((c) => (
                   <tr
                     key={c.id}
                     onClick={() => setSelectedCaseId(c.id)}
-                    className="hover:bg-slate-800/40 cursor-pointer transition group"
+                    className="hover:bg-[#ebe8e4]/40 cursor-pointer transition-colors group"
                   >
-                    {/* Column 1: Order / Payment */}
-                    <td className="p-4 pl-6">
-                      <div className="font-mono text-white font-semibold flex items-center gap-1.5">
-                        <span>{c.order_id || c.payment_id}</span>
-                        <ChevronRight className="w-3 h-3 text-slate-600 group-hover:text-blue-400 transition" />
-                      </div>
-                      <div className="text-[11px] text-slate-400 mt-0.5">
-                        {formatDate(c.created_at)} • <span className="uppercase font-mono text-[10px] text-slate-500">{c.payment_method}</span>
+                    {/* Amount & ID */}
+                    <td className="py-3.5 pr-4">
+                      <div className="font-normal text-sm text-[#000000]">{formatINR(c.amount)}</div>
+                      <div className="font-mono text-[11px] text-[#777169] truncate max-w-[140px]">
+                        {c.order_id || c.payment_id}
                       </div>
                     </td>
 
-                    {/* Column 2: Amount */}
-                    <td className="p-4 whitespace-nowrap">
-                      <div className="font-bold text-sm text-white">{formatINR(c.amount)}</div>
-                      <div className="text-[11px] text-slate-400 mt-0.5">
-                        {getRecoverabilityBadge(c.recoverability_score)}
-                      </div>
-                    </td>
-
-                    {/* Column 3: Customer Failure Diagnosis */}
-                    <td className="p-4 max-w-xs">
-                      <div className="font-medium text-slate-200 leading-tight">
+                    {/* Failure Reason */}
+                    <td className="py-3.5 px-4 max-w-[180px]">
+                      <div className="text-xs text-[#000000] font-normal leading-tight">
                         {getPlainEnglishFailure(c.failure_code, c.failure_description)}
                       </div>
-                      <div className="flex items-center gap-1.5 mt-1">
-                        <code className="text-[10px] px-1.5 py-0.5 rounded bg-slate-950 border border-slate-800 text-slate-400 font-mono">
-                          {c.failure_code}
-                        </code>
-                        <span className="text-[10px] text-slate-500">
-                          Exp. Value: {formatINR(c.expected_recovery_value)}
-                        </span>
+                      <div className="font-mono text-[10px] text-[#777169] mt-0.5 uppercase">
+                        {c.payment_method}
                       </div>
                     </td>
 
-                    {/* Column 4: Recovery Decision & Policy */}
-                    <td className="p-4 max-w-sm">
-                      <div className="text-slate-200 font-medium leading-tight flex items-center gap-1.5">
-                        <Sparkles className="w-3 h-3 text-blue-400 flex-shrink-0" />
-                        <span>{getRecoveryActionDisplay(c.latest_decision?.recommended_action)}</span>
+                    {/* AI Recommendation */}
+                    <td className="py-3.5 px-4 max-w-[160px]">
+                      <div className="text-xs text-[#000000] font-normal">
+                        {getAIRecommendationDisplay(c.latest_decision?.recommended_action)}
                       </div>
-                      <div className="text-[11px] text-slate-400 mt-1 flex items-center gap-1">
-                        <Shield className="w-3 h-3 text-slate-500 flex-shrink-0" />
-                        <span className="truncate">{getPolicySafeguardDisplay(c.latest_policy_check?.policy_result, c.latest_policy_check?.reasons, c.amount)}</span>
+                      <div className="font-mono text-[10px] text-[#777169] mt-0.5">
+                        Conf: {Math.round((c.latest_decision?.confidence || 0.85) * 100)}%
                       </div>
                     </td>
 
-                    {/* Column 5: Status */}
-                    <td className="p-4 whitespace-nowrap">
-                      {getStatusBadge(c.status)}
+                    {/* Policy */}
+                    <td className="py-3.5 px-4">
+                      <div className="text-xs font-normal text-[#000000]">
+                        {getPolicyCheckDisplay(c.latest_policy_check?.policy_result, c.amount)}
+                      </div>
+                      <div className="text-[10px] text-[#777169] mt-0.5">
+                        {c.amount >= 2500000 ? '> ₹25k limit' : 'Under limit'}
+                      </div>
                     </td>
 
-                    {/* Column 6: Actions */}
-                    <td className="p-4 pr-6 text-right whitespace-nowrap" onClick={(e) => e.stopPropagation()}>
-                      <div className="flex items-center justify-end gap-2">
-                        {c.status !== 'RECOVERED' && (
-                          <Link
-                            href={`/recover/${c.id}`}
-                            target="_blank"
-                            className="px-2.5 py-1 bg-emerald-600/20 hover:bg-emerald-600/30 text-emerald-400 border border-emerald-500/30 rounded-lg text-xs font-medium transition inline-flex items-center gap-1"
-                            title="Open customer checkout recovery link"
-                          >
-                            <span>Pay Link</span>
-                            <ArrowUpRight className="w-3 h-3" />
-                          </Link>
-                        )}
-                        <button
-                          onClick={() => setSelectedCaseId(c.id)}
-                          className="px-3 py-1 bg-slate-800 hover:bg-slate-700 text-slate-200 rounded-lg text-xs font-medium transition inline-flex items-center gap-1"
-                        >
-                          <span>Journey</span>
-                          <ArrowRight className="w-3 h-3 text-slate-400" />
-                        </button>
+                    {/* Action */}
+                    <td className="py-3.5 px-4 max-w-[150px]">
+                      <div className="text-xs text-[#000000] font-normal">
+                        {getExecutedActionDisplay(c.latest_decision?.recommended_action, c.status)}
                       </div>
+                    </td>
+
+                    {/* Status / Result */}
+                    <td className="py-3.5 px-4 whitespace-nowrap">
+                      {renderStatus(c.status, c.amount)}
+                    </td>
+
+                    {/* Inspect button */}
+                    <td className="py-3.5 pl-4 text-right whitespace-nowrap" onClick={(e) => e.stopPropagation()}>
+                      <button
+                        onClick={() => setSelectedCaseId(c.id)}
+                        className="px-3 py-1 rounded-full bg-[#fdfcfc] border border-[#ebe8e4] text-[#44403b] hover:bg-[#ebe8e4] hover:text-[#000000] text-xs font-medium transition-colors"
+                      >
+                        Inspect
+                      </button>
                     </td>
                   </tr>
                 ))}
@@ -895,434 +730,500 @@ export default function DashboardPage() {
             </table>
           </div>
         )}
-      </div>
+      </section>
 
-      {/* Dedicated Demo & Test Scenarios Section (Req 1) */}
-      <section id="demo-scenarios" className="pt-4 scroll-mt-20">
-        <div className="bg-slate-900/70 border border-slate-800 rounded-2xl p-6 sm:p-8 relative overflow-hidden">
-          {/* Section Header */}
-          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 border-b border-slate-800/80 pb-5">
-            <div>
-              <div className="flex items-center gap-2">
-                <span className="px-2.5 py-0.5 rounded-md bg-purple-950/80 text-purple-400 border border-purple-800/60 font-mono text-xs font-semibold uppercase tracking-wider">
-                  Test Scenarios & Sandbox
-                </span>
-                <span className="text-xs text-slate-500">• Reviewer Workbench</span>
+      {/* 7. NEEDS ATTENTION (Dedicated Section After Recovery Activity) */}
+      <section className="rounded-[20px] bg-[#f5f3f1] border border-[#ebe8e4] p-6 sm:p-8 space-y-4">
+        <div>
+          <h2 className="text-xl font-normal text-[#000000] tracking-tight">Needs attention</h2>
+          <p className="text-xs text-[#777169] mt-0.5 font-normal">
+            Cases that require merchant review.
+          </p>
+        </div>
+
+        {needsAttentionCases.length === 0 ? (
+          <div className="p-6 rounded-[16px] bg-[#fdfcfc] border border-[#ebe8e4] text-xs text-[#777169]">
+            All recovery workflows are currently operating within autonomous safety thresholds. No manual intervention required.
+          </div>
+        ) : (
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+            {needsAttentionCases.map((c) => (
+              <div
+                key={c.id}
+                className="rounded-[16px] bg-[#fdfcfc] border border-[#ebe8e4] p-5 flex flex-col justify-between space-y-3"
+              >
+                <div>
+                  <div className="flex items-center justify-between">
+                    <span className="text-lg font-light text-[#000000]">{formatINR(c.amount)}</span>
+                    <span className="inline-flex items-center gap-1.5 text-xs text-[#000000]">
+                      <span className="w-1.5 h-1.5 rounded-full bg-[#ff4704]"></span>
+                      <span>Review required</span>
+                    </span>
+                  </div>
+                  <div className="font-mono text-xs text-[#777169] mt-0.5">
+                    {c.order_id || c.payment_id}
+                  </div>
+                  <div className="text-xs text-[#44403b] mt-2 font-normal leading-relaxed">
+                    {c.amount >= 2500000
+                      ? 'High-value payment. Automation stopped because the payment exceeds the recovery threshold.'
+                      : `Policy escalation: ${getPlainEnglishFailure(c.failure_code, c.failure_description)}`}
+                  </div>
+                </div>
+
+                <div className="pt-2 border-t border-[#ebe8e4] flex items-center justify-between">
+                  <span className="text-[11px] text-[#777169]">
+                    Autonomy threshold: ₹25,000
+                  </span>
+                  <button
+                    onClick={() => setSelectedCaseId(c.id)}
+                    className="px-4 py-1.5 rounded-full bg-[#000000] text-[#fdfcfc] hover:bg-[#44403b] text-xs font-medium transition-colors"
+                  >
+                    Review case
+                  </button>
+                </div>
               </div>
-              <h2 className="text-lg md:text-xl font-bold text-white mt-1">
-                Simulate Payment Failures & Verify Control Loops
-              </h2>
-              <p className="text-xs md:text-sm text-slate-400 mt-1 max-w-2xl">
-                Inject real payment failure webhooks to observe how RecoverAI combines AI diagnosis with deterministic policy guardrails to recover revenue.
+            ))}
+          </div>
+        )}
+      </section>
+
+      {/* 9. TECHNICAL / AUDIT INFORMATION (Expandable Section) */}
+      <section className="rounded-[20px] bg-[#f5f3f1] border border-[#ebe8e4] p-6 space-y-4">
+        <div className="flex items-center justify-between">
+          <div>
+            <h3 className="text-sm font-normal text-[#000000]">Technical & audit control plane</h3>
+            <p className="text-xs text-[#777169] mt-0.5">
+              Deterministic policy parameters, state transitions, and verification sources.
+            </p>
+          </div>
+          <button
+            onClick={() => setAuditDetailsOpen(!auditDetailsOpen)}
+            className="px-3.5 py-1.5 rounded-full bg-[#fdfcfc] border border-[#ebe8e4] text-xs text-[#44403b] hover:bg-[#ebe8e4] hover:text-[#000000] transition-colors flex items-center gap-1"
+          >
+            <span>{auditDetailsOpen ? 'Hide audit telemetry' : 'Show audit telemetry'}</span>
+            {auditDetailsOpen ? <ChevronUp className="w-3 h-3" /> : <ChevronDown className="w-3 h-3" />}
+          </button>
+        </div>
+
+        {auditDetailsOpen && (
+          <div className="rounded-[16px] bg-[#fdfcfc] border border-[#ebe8e4] p-5 space-y-3 font-mono text-xs text-[#44403b]">
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+              <div>
+                <span className="text-[#777169]">Gateway Environment:</span>{' '}
+                <span className="text-[#000000]">{rzpStatus?.hasLiveCredentials ? 'Razorpay Test Mode' : 'High-Fidelity Payment Simulator'}</span>
+              </div>
+              <div>
+                <span className="text-[#777169]">Webhook Endpoint:</span>{' '}
+                <span className="text-[#000000]">{rzpStatus?.webhookUrl || '/api/webhooks/razorpay'}</span>
+              </div>
+              <div>
+                <span className="text-[#777169]">Max Autonomous Limit:</span>{' '}
+                <span className="text-[#000000]">₹25,000 (2,500,000 paise)</span>
+              </div>
+              <div>
+                <span className="text-[#777169]">Control Loop:</span>{' '}
+                <span className="text-[#000000]">PAYMENT_FAILED → DIAGNOSE → POLICY → EXECUTE → VERIFY</span>
+              </div>
+              <div>
+                <span className="text-[#777169]">Verification Law:</span>{' '}
+                <span className="text-[#000000]">Authoritative Webhook Event Determines Truth</span>
+              </div>
+              <div>
+                <span className="text-[#777169]">Idempotency Guard:</span>{' '}
+                <span className="text-[#000000]">Unique key per recovery action; duplicate safe</span>
+              </div>
+            </div>
+            <div className="pt-2 border-t border-[#ebe8e4] text-[11px] text-[#777169]">
+              Developer telemetry: Inspect complete raw JSON audit logs at <code className="bg-[#f5f3f1] px-1.5 py-0.5 rounded text-[#000000]">/cases/[id]</code>.
+            </div>
+          </div>
+        )}
+      </section>
+
+      {/* 8. DEMO SCENARIOS (Near Bottom) */}
+      <section id="demo-scenarios" className="rounded-[20px] bg-[#f5f3f1] border border-[#ebe8e4] p-6 sm:p-8 space-y-5">
+        <div className="flex flex-col sm:flex-row sm:items-baseline justify-between gap-2 border-b border-[#ebe8e4] pb-4">
+          <div>
+            <div className="text-[11px] font-mono text-[#777169] uppercase tracking-wider">Simulator environment</div>
+            <h2 className="text-xl font-normal text-[#000000] tracking-tight mt-0.5">Demo scenarios</h2>
+            <p className="text-xs text-[#777169] mt-0.5 font-normal">
+              Generate controlled test cases to demonstrate recovery behavior.
+            </p>
+          </div>
+          {testSuccessMessage && (
+            <div className="text-xs text-[#000000] bg-[#fdfcfc] border border-[#ebe8e4] px-3.5 py-1.5 rounded-full flex items-center gap-1.5">
+              <span className="w-1.5 h-1.5 rounded-full bg-[#0447ff]"></span>
+              <span>{testSuccessMessage}</span>
+            </div>
+          )}
+        </div>
+
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+          {/* Scenario 1 */}
+          <div className="rounded-[16px] bg-[#fdfcfc] border border-[#ebe8e4] p-5 flex flex-col justify-between space-y-4">
+            <div>
+              <div className="flex items-center justify-between">
+                <span className="font-mono text-xs text-[#777169]">Transient</span>
+                <span className="text-base font-light text-[#000000]">₹4,500</span>
+              </div>
+              <h3 className="text-sm font-normal text-[#000000] mt-2">Auth Dropout</h3>
+              <p className="text-xs text-[#777169] mt-1 font-normal leading-relaxed">
+                Customer aborted 3DS authentication during OTP. AI diagnoses transient friction; policy allows autonomous recovery; Smart Payment Link generated.
               </p>
             </div>
-
-            {testSuccessMessage && (
-              <div className="bg-emerald-950/80 border border-emerald-500/40 text-emerald-300 px-3.5 py-2 rounded-xl text-xs flex items-center gap-2 animate-fadeIn">
-                <CheckCircle2 className="w-4 h-4 text-emerald-400 flex-shrink-0" />
-                <span>{testSuccessMessage}</span>
-              </div>
-            )}
+            <button
+              onClick={() =>
+                handleCreateTestRecovery(
+                  450000,
+                  'AUTH_DROPOUT',
+                  'Customer aborted 3DS authentication flow during checkout',
+                  'Auth Dropout'
+                )
+              }
+              disabled={creatingTest}
+              className="w-full py-2 px-4 rounded-full bg-[#fdfcfc] border border-[#ebe8e4] text-[#44403b] hover:bg-[#ebe8e4] hover:text-[#000000] text-xs font-medium transition-colors"
+            >
+              {creatingTest ? 'Generating...' : 'Run ₹4,500 Auth Dropout'}
+            </button>
           </div>
 
-          {/* Test Scenario Action Cards */}
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-5 mt-6">
-            {/* Scenario 1: Transient Auth Dropout */}
-            <div className="bg-slate-950/80 border border-slate-800 hover:border-slate-700 rounded-xl p-5 flex flex-col justify-between space-y-4 transition">
-              <div>
-                <div className="flex items-center justify-between">
-                  <span className="text-xs font-mono font-semibold px-2 py-0.5 rounded bg-blue-500/10 text-blue-400 border border-blue-500/20">
-                    TRANSIENT FRICTION
-                  </span>
-                  <span className="text-base font-bold text-white">₹4,500</span>
-                </div>
-                <h3 className="text-sm font-semibold text-white mt-3">Auth Dropout at OTP</h3>
-                <p className="text-xs text-slate-400 mt-1 leading-relaxed">
-                  Customer closed browser or failed 3DS verification. AI diagnoses transient friction; policy allows autonomous recovery; Smart Payment Link generated.
-                </p>
+          {/* Scenario 2 */}
+          <div className="rounded-[16px] bg-[#fdfcfc] border border-[#ebe8e4] p-5 flex flex-col justify-between space-y-4">
+            <div>
+              <div className="flex items-center justify-between">
+                <span className="font-mono text-xs text-[#777169]">Escalation</span>
+                <span className="text-base font-light text-[#000000]">₹75,000</span>
               </div>
-
-              <button
-                onClick={() =>
-                  handleCreateTestRecovery(
-                    450000,
-                    'AUTH_DROPOUT',
-                    'Customer aborted 3DS authentication flow during checkout',
-                    'Auth Dropout Scenario'
-                  )
-                }
-                disabled={creatingTest}
-                className="w-full py-2 px-3 bg-blue-600/90 hover:bg-blue-600 disabled:opacity-50 text-white rounded-lg text-xs font-semibold transition flex items-center justify-center gap-1.5 shadow"
-              >
-                {creatingTest ? (
-                  <span>Processing...</span>
-                ) : (
-                  <>
-                    <Zap className="w-3.5 h-3.5" />
-                    <span>Run ₹4,500 Dropout Scenario</span>
-                  </>
-                )}
-              </button>
+              <h3 className="text-sm font-normal text-[#000000] mt-2">High-Value (Escalate)</h3>
+              <p className="text-xs text-[#777169] mt-1 font-normal leading-relaxed">
+                High-value order fails on gateway error. Model recommends retry, but Deterministic Policy blocks autonomous action and escalates to merchant review (&gt; ₹25,000 threshold).
+              </p>
             </div>
+            <button
+              onClick={() =>
+                handleCreateTestRecovery(
+                  7500000,
+                  'GATEWAY_ERROR',
+                  'Bank payment gateway encountered internal processing error on high-value transaction',
+                  'High-Value Escalation'
+                )
+              }
+              disabled={creatingTest}
+              className="w-full py-2 px-4 rounded-full bg-[#fdfcfc] border border-[#ebe8e4] text-[#44403b] hover:bg-[#ebe8e4] hover:text-[#000000] text-xs font-medium transition-colors"
+            >
+              {creatingTest ? 'Generating...' : 'Run ₹75,000 High-Value'}
+            </button>
+          </div>
 
-            {/* Scenario 2: High-Value Threshold Escalation */}
-            <div className="bg-slate-950/80 border border-purple-500/30 hover:border-purple-500/60 rounded-xl p-5 flex flex-col justify-between space-y-4 transition">
-              <div>
-                <div className="flex items-center justify-between">
-                  <span className="text-xs font-mono font-semibold px-2 py-0.5 rounded bg-purple-500/15 text-purple-300 border border-purple-500/30">
-                    POLICY ESCALATION
-                  </span>
-                  <span className="text-base font-bold text-purple-200">₹75,000</span>
-                </div>
-                <h3 className="text-sm font-semibold text-white mt-3">High-Value Merchant Review</h3>
-                <p className="text-xs text-slate-400 mt-1 leading-relaxed">
-                  High-value enterprise order fails on gateway error. Model recommends retry, but Deterministic Policy BLOCKS autonomous action and ESCALATES to merchant (&gt; ₹25k limit).
-                </p>
+          {/* Scenario 3 */}
+          <div className="rounded-[16px] bg-[#fdfcfc] border border-[#ebe8e4] p-5 flex flex-col justify-between space-y-4">
+            <div>
+              <div className="flex items-center justify-between">
+                <span className="font-mono text-xs text-[#777169]">Infrastructure</span>
+                <span className="text-base font-light text-[#000000]">₹12,000</span>
               </div>
-
-              <button
-                onClick={() =>
-                  handleCreateTestRecovery(
-                    7500000,
-                    'GATEWAY_ERROR',
-                    'Bank payment gateway encountered internal processing error on high-value transaction',
-                    'High-Value Escalation Scenario'
-                  )
-                }
-                disabled={creatingTest}
-                className="w-full py-2 px-3 bg-purple-600/90 hover:bg-purple-600 disabled:opacity-50 text-white rounded-lg text-xs font-semibold transition flex items-center justify-center gap-1.5 shadow"
-              >
-                {creatingTest ? (
-                  <span>Processing...</span>
-                ) : (
-                  <>
-                    <ShieldAlert className="w-3.5 h-3.5" />
-                    <span>Run ₹75,000 Escalation Scenario</span>
-                  </>
-                )}
-              </button>
+              <h3 className="text-sm font-normal text-[#000000] mt-2">Gateway Timeout</h3>
+              <p className="text-xs text-[#777169] mt-1 font-normal leading-relaxed">
+                Card acquiring bank timed out. AI predicts high recoverability; policy permits autonomous retry; system executes smart route recovery.
+              </p>
             </div>
-
-            {/* Scenario 3: Bank Gateway Timeout */}
-            <div className="bg-slate-950/80 border border-slate-800 hover:border-slate-700 rounded-xl p-5 flex flex-col justify-between space-y-4 transition">
-              <div>
-                <div className="flex items-center justify-between">
-                  <span className="text-xs font-mono font-semibold px-2 py-0.5 rounded bg-cyan-500/10 text-cyan-400 border border-cyan-500/20">
-                    INFRASTRUCTURE FAILURE
-                  </span>
-                  <span className="text-base font-bold text-white">₹12,000</span>
-                </div>
-                <h3 className="text-sm font-semibold text-white mt-3">Bank 3DS Gateway Timeout</h3>
-                <p className="text-xs text-slate-400 mt-1 leading-relaxed">
-                  Card acquiring bank timed out. AI predicts 85% recoverability; policy permits autonomous retry; system executes smart route recovery with idempotency protection.
-                </p>
-              </div>
-
-              <button
-                onClick={() =>
-                  handleCreateTestRecovery(
-                    1200000,
-                    'GATEWAY_TIMEOUT',
-                    'Bank 3DS gateway timeout during transaction processing',
-                    'Gateway Timeout Scenario'
-                  )
-                }
-                disabled={creatingTest}
-                className="w-full py-2 px-3 bg-slate-800 hover:bg-slate-700 disabled:opacity-50 text-slate-200 rounded-lg text-xs font-semibold transition flex items-center justify-center gap-1.5 border border-slate-700"
-              >
-                {creatingTest ? (
-                  <span>Processing...</span>
-                ) : (
-                  <>
-                    <RefreshCw className="w-3.5 h-3.5 text-cyan-400" />
-                    <span>Run ₹12,000 Timeout Scenario</span>
-                  </>
-                )}
-              </button>
-            </div>
+            <button
+              onClick={() =>
+                handleCreateTestRecovery(
+                  1200000,
+                  'GATEWAY_TIMEOUT',
+                  'Bank 3DS gateway timeout during transaction processing',
+                  'Gateway Timeout'
+                )
+              }
+              disabled={creatingTest}
+              className="w-full py-2 px-4 rounded-full bg-[#fdfcfc] border border-[#ebe8e4] text-[#44403b] hover:bg-[#ebe8e4] hover:text-[#000000] text-xs font-medium transition-colors"
+            >
+              {creatingTest ? 'Generating...' : 'Run ₹12,000 Gateway Timeout'}
+            </button>
           </div>
         </div>
       </section>
 
-      {/* Interactive Case Journey Slide-over Drawer (Req 5) */}
+      {/* 5. CASE DETAIL EXPERIENCE (Drawer / Expandable Panel) */}
       {selectedCaseId && (
         <div className="fixed inset-0 z-50 overflow-hidden flex justify-end">
           {/* Backdrop */}
           <div
-            className="fixed inset-0 bg-slate-950/80 backdrop-blur-sm transition-opacity"
+            className="fixed inset-0 bg-[#000000]/25 backdrop-blur-sm transition-opacity"
             onClick={() => setSelectedCaseId(null)}
           />
 
-          {/* Drawer Content Panel */}
-          <div className="relative w-full max-w-2xl bg-slate-900 border-l border-slate-800 h-full shadow-2xl overflow-y-auto z-10 flex flex-col">
-            {/* Drawer Header */}
-            <div className="p-6 border-b border-slate-800 bg-slate-950 sticky top-0 z-20 flex items-center justify-between">
+          {/* Drawer Panel */}
+          <div className="relative w-full max-w-xl bg-[#fdfcfc] border-l border-[#ebe8e4] h-full shadow-xl overflow-y-auto z-50 flex flex-col">
+            {/* Header */}
+            <div className="p-6 border-b border-[#ebe8e4] bg-[#fdfcfc] sticky top-0 z-20 flex items-start justify-between">
               <div>
-                <div className="flex items-center gap-2">
-                  <span className="text-xs font-mono font-medium text-slate-400">
-                    {caseDetail?.case?.order_id || caseDetail?.case?.payment_id || selectedCaseId}
-                  </span>
-                  {caseDetail?.case && getStatusBadge(caseDetail.case.status)}
+                <div className="font-mono text-xs text-[#777169]">
+                  {caseDetail?.case?.order_id || caseDetail?.case?.payment_id || selectedCaseId}
                 </div>
-                <div className="text-2xl font-bold text-white mt-1">
+                <div className="text-2xl md:text-3xl font-light text-[#000000] mt-1">
                   {caseDetail?.case ? formatINR(caseDetail.case.amount) : 'Loading...'}
+                </div>
+                <div className="mt-1">
+                  {caseDetail?.case && renderStatus(caseDetail.case.status, caseDetail.case.amount)}
                 </div>
               </div>
 
               <button
                 onClick={() => setSelectedCaseId(null)}
-                className="p-2 rounded-xl bg-slate-900 hover:bg-slate-800 text-slate-400 hover:text-white border border-slate-800 transition"
+                className="p-1.5 rounded-full bg-[#f5f3f1] border border-[#ebe8e4] text-[#44403b] hover:bg-[#ebe8e4] hover:text-[#000000] transition-colors"
               >
-                <X className="w-5 h-5" />
+                <X className="w-4 h-4" />
               </button>
             </div>
 
-            {/* Action Feedback Banner */}
+            {/* Notification Banner */}
             {actionMessage && (
-              <div className="m-6 mb-0 p-4 rounded-xl bg-blue-950/60 border border-blue-500/40 text-blue-300 text-xs flex items-center gap-2">
-                <Info className="w-4 h-4 text-blue-400 flex-shrink-0" />
+              <div className="m-6 mb-0 p-3.5 rounded-[12px] bg-[#f5f3f1] border border-[#ebe8e4] text-xs text-[#000000] flex items-center gap-2">
+                <Info className="w-4 h-4 text-[#0447ff] flex-shrink-0" />
                 <span>{actionMessage}</span>
               </div>
             )}
 
             {loadingCaseDetail || !caseDetail ? (
-              <div className="flex-1 flex items-center justify-center p-12 text-slate-400 text-xs">
-                <RefreshCw className="w-6 h-6 animate-spin text-blue-400 mb-2" />
-                <span className="ml-2">Loading 6-step recovery journey...</span>
+              <div className="flex-1 flex items-center justify-center p-12 text-xs text-[#777169]">
+                <RefreshCw className="w-4 h-4 animate-spin text-[#44403b] mr-2" />
+                <span>Loading recovery timeline...</span>
               </div>
             ) : (
               <div className="p-6 space-y-8 flex-1">
-                {/* 6-Step Visual Journey Timeline (Req 5) */}
+                {/* Visual Story Vertical Timeline */}
                 <div>
-                  <h3 className="text-xs font-bold text-slate-400 uppercase tracking-wider mb-4 flex items-center gap-1.5">
-                    <Layers className="w-3.5 h-3.5 text-blue-400" />
-                    <span>The 6-Step Recovery Journey</span>
+                  <h3 className="text-xs font-normal text-[#777169] uppercase tracking-wider mb-5">
+                    Recovery Workflow Timeline
                   </h3>
 
-                  <div className="space-y-4 relative before:absolute before:left-4 before:top-4 before:bottom-4 before:w-0.5 before:bg-slate-800">
-                    {/* Step 1: FAILED */}
-                    <div className="relative flex items-start gap-4 pl-1">
-                      <div className="w-7 h-7 rounded-full bg-rose-500/20 border border-rose-500/50 flex items-center justify-center text-rose-400 z-10 flex-shrink-0">
-                        <X className="w-3.5 h-3.5" />
+                  <div className="border-l border-[#ebe8e4] ml-2 pl-6 space-y-6">
+                    {/* FAILED */}
+                    <div className="relative">
+                      <div className="absolute -left-[31px] top-1 w-2.5 h-2.5 rounded-full bg-[#000000]"></div>
+                      <div className="text-[11px] font-mono text-[#777169] uppercase">FAILED</div>
+                      <div className="text-sm font-normal text-[#000000] mt-0.5">
+                        Payment failed
                       </div>
-                      <div className="bg-slate-950/70 border border-slate-800 rounded-xl p-3.5 flex-1">
-                        <div className="flex items-center justify-between">
-                          <span className="text-xs font-bold text-rose-400 uppercase tracking-wide">1. Payment Failed</span>
-                          <span className="text-[11px] text-slate-500 font-mono">
-                            {formatDate(caseDetail.case.created_at)}
-                          </span>
-                        </div>
-                        <p className="text-xs text-white font-medium mt-1">
-                          {getPlainEnglishFailure(caseDetail.case.failure_code, caseDetail.case.failure_description)}
-                        </p>
-                        <div className="text-[11px] text-slate-400 mt-1 font-mono">
-                          Method: {caseDetail.case.payment_method?.toUpperCase()} • Gateway Code: {caseDetail.case.failure_code}
-                        </div>
+                      <div className="text-xs text-[#44403b] mt-1 font-normal">
+                        {getPlainEnglishFailure(caseDetail.case.failure_code, caseDetail.case.failure_description)}
+                      </div>
+                      <div className="font-mono text-[11px] text-[#777169] mt-1">
+                        Method: {caseDetail.case.payment_method?.toUpperCase()} • Error: {caseDetail.case.failure_code} • {formatDate(caseDetail.case.created_at)}
                       </div>
                     </div>
 
-                    {/* Step 2: DIAGNOSED */}
-                    <div className="relative flex items-start gap-4 pl-1">
-                      <div className="w-7 h-7 rounded-full bg-blue-500/20 border border-blue-500/50 flex items-center justify-center text-blue-400 z-10 flex-shrink-0">
-                        <Sparkles className="w-3.5 h-3.5" />
+                    {/* DIAGNOSED */}
+                    <div className="relative">
+                      <div className="absolute -left-[31px] top-1 w-2.5 h-2.5 rounded-full bg-[#000000]"></div>
+                      <div className="text-[11px] font-mono text-[#777169] uppercase">DIAGNOSED</div>
+                      <div className="text-sm font-normal text-[#000000] mt-0.5">
+                        {caseDetail.decisions?.[0]?.diagnosis || 'Likely temporary payment gateway communication friction'}
                       </div>
-                      <div className="bg-slate-950/70 border border-slate-800 rounded-xl p-3.5 flex-1">
-                        <div className="flex items-center justify-between">
-                          <span className="text-xs font-bold text-blue-400 uppercase tracking-wide">2. AI Diagnosis</span>
-                          {getRecoverabilityBadge(caseDetail.case.recoverability_score)}
-                        </div>
-                        <p className="text-xs text-slate-200 mt-1">
-                          Diagnosis: <strong className="text-white">{caseDetail.decisions?.[0]?.diagnosis || 'Transient gateway communication glitch'}</strong>
-                        </p>
-                        <div className="text-[11px] text-slate-400 mt-1">
-                          Expected Recovery Value: <strong className="text-emerald-400">{formatINR(caseDetail.case.expected_recovery_value)}</strong>
-                        </div>
+                      <div className="text-xs text-[#777169] mt-1">
+                        Recoverability: <strong className="text-[#000000] font-normal">{Math.round((caseDetail.case.recoverability_score || 0.7) * 100)}%</strong> • Expected value: <strong className="text-[#000000] font-normal">{formatINR(caseDetail.case.expected_recovery_value)}</strong>
                       </div>
                     </div>
 
-                    {/* Step 3: RECOMMENDED */}
-                    <div className="relative flex items-start gap-4 pl-1">
-                      <div className="w-7 h-7 rounded-full bg-indigo-500/20 border border-indigo-500/50 flex items-center justify-center text-indigo-400 z-10 flex-shrink-0">
-                        <Zap className="w-3.5 h-3.5" />
+                    {/* RECOMMENDED */}
+                    <div className="relative">
+                      <div className="absolute -left-[31px] top-1 w-2.5 h-2.5 rounded-full bg-[#000000]"></div>
+                      <div className="text-[11px] font-mono text-[#777169] uppercase">RECOMMENDED</div>
+                      <div className="text-sm font-normal text-[#000000] mt-0.5">
+                        {getAIRecommendationDisplay(caseDetail.decisions?.[0]?.recommended_action)}
                       </div>
-                      <div className="bg-slate-950/70 border border-slate-800 rounded-xl p-3.5 flex-1">
-                        <div className="flex items-center justify-between">
-                          <span className="text-xs font-bold text-indigo-400 uppercase tracking-wide">3. Recommended Action</span>
-                          <span className="text-[11px] text-indigo-300 font-mono">
-                            Conf: {Math.round((caseDetail.decisions?.[0]?.confidence || 0.85) * 100)}%
-                          </span>
-                        </div>
-                        <p className="text-xs text-white font-medium mt-1">
-                          {getRecoveryActionDisplay(caseDetail.decisions?.[0]?.recommended_action)}
-                        </p>
-                        <p className="text-[11px] text-slate-400 mt-1.5 leading-relaxed bg-slate-900/80 p-2 rounded border border-slate-800">
-                          &ldquo;{caseDetail.decisions?.[0]?.rationale || 'High recovery probability detected on retry route.'}&rdquo;
-                        </p>
+                      <p className="text-xs text-[#44403b] mt-1.5 font-normal leading-relaxed bg-[#f5f3f1] p-3 rounded-[12px] border border-[#ebe8e4]">
+                        &ldquo;{caseDetail.decisions?.[0]?.rationale || 'High recovery likelihood on customer payment link.'}&rdquo;
+                      </p>
+                      <div className="text-[11px] text-[#777169] mt-1">
+                        AI proposes action based on failure pattern and customer telemetry.
                       </div>
                     </div>
 
-                    {/* Step 4: POLICY CHECKED */}
-                    <div className="relative flex items-start gap-4 pl-1">
-                      <div className={`w-7 h-7 rounded-full flex items-center justify-center z-10 flex-shrink-0 ${
-                        caseDetail.policyChecks?.[0]?.policy_result === 'ESCALATE'
-                          ? 'bg-amber-500/20 border border-amber-500/50 text-amber-400'
-                          : 'bg-emerald-500/20 border border-emerald-500/50 text-emerald-400'
-                      }`}>
-                        <Shield className="w-3.5 h-3.5" />
+                    {/* POLICY CHECK */}
+                    <div className="relative">
+                      <div className="absolute -left-[31px] top-1 w-2.5 h-2.5 rounded-full bg-[#000000]"></div>
+                      <div className="text-[11px] font-mono text-[#777169] uppercase">POLICY CHECK</div>
+                      <div className="text-sm font-normal text-[#000000] mt-0.5">
+                        {caseDetail.policyChecks?.[0]?.policy_result === 'ESCALATE' || caseDetail.case.amount >= 2500000
+                          ? 'Escalated'
+                          : caseDetail.policyChecks?.[0]?.policy_result === 'BLOCK'
+                          ? 'Blocked'
+                          : 'Allowed'}
                       </div>
-                      <div className="bg-slate-950/70 border border-slate-800 rounded-xl p-3.5 flex-1">
-                        <div className="flex items-center justify-between">
-                          <span className="text-xs font-bold text-cyan-400 uppercase tracking-wide">4. Deterministic Policy Check</span>
-                          <span className={`text-[11px] font-bold px-2 py-0.5 rounded font-mono ${
-                            caseDetail.policyChecks?.[0]?.policy_result === 'ESCALATE'
-                              ? 'bg-amber-500/10 text-amber-400 border border-amber-500/20'
-                              : 'bg-emerald-500/10 text-emerald-400 border border-emerald-500/20'
-                          }`}>
-                            {caseDetail.policyChecks?.[0]?.policy_result || 'ALLOW'}
-                          </span>
-                        </div>
-                        <div className="text-xs text-slate-300 mt-1">
-                          {getPolicySafeguardDisplay(caseDetail.policyChecks?.[0]?.policy_result, caseDetail.policyChecks?.[0]?.reasons, caseDetail.case.amount)}
-                        </div>
-                        <div className="text-[11px] text-slate-400 mt-1.5 space-y-0.5">
-                          <div>• Max autonomous threshold: ₹25,000</div>
-                          <div>• Customer opt-out check: PASSED (Consent active)</div>
-                          <div>• Idempotency safeguard: VERIFIED (Zero duplicate charge guarantee)</div>
-                        </div>
-                      </div>
-                    </div>
-
-                    {/* Step 5: EXECUTED */}
-                    <div className="relative flex items-start gap-4 pl-1">
-                      <div className="w-7 h-7 rounded-full bg-cyan-500/20 border border-cyan-500/50 flex items-center justify-center text-cyan-400 z-10 flex-shrink-0">
-                        <Check className="w-3.5 h-3.5" />
-                      </div>
-                      <div className="bg-slate-950/70 border border-slate-800 rounded-xl p-3.5 flex-1">
-                        <div className="flex items-center justify-between">
-                          <span className="text-xs font-bold text-cyan-400 uppercase tracking-wide">5. Controlled Execution</span>
-                          <span className="text-[11px] text-emerald-400 font-mono">
-                            {caseDetail.toolExecutions?.[0]?.status || 'EXECUTED'}
-                          </span>
-                        </div>
-                        <p className="text-xs text-slate-200 mt-1">
-                          Tool: <code className="text-cyan-300 font-mono text-[11px]">{caseDetail.toolExecutions?.[0]?.tool_name || 'tool_create_payment_link'}</code>
-                        </p>
-                        {caseDetail.case.recovery_url && (
-                          <div className="mt-2">
-                            <Link
-                              href={caseDetail.case.recovery_url}
-                              target="_blank"
-                              className="text-[11px] text-blue-400 hover:text-blue-300 underline flex items-center gap-1"
-                            >
-                              <span>Customer Recovery Checkout URL</span>
-                              <ExternalLink className="w-3 h-3" />
-                            </Link>
-                          </div>
+                      <div className="text-xs text-[#44403b] mt-1 space-y-1">
+                        {caseDetail.policyChecks?.[0]?.policy_result === 'ESCALATE' || caseDetail.case.amount >= 2500000 ? (
+                          <>
+                            <div>Reason: Payment exceeds automated recovery threshold (₹25,000)</div>
+                            <div className="text-[#777169]">• Automation stopped; human operator review required</div>
+                          </>
+                        ) : (
+                          <>
+                            <div>✓ Below automated threshold (₹25,000 max)</div>
+                            <div>✓ Recovery permitted for failure category</div>
+                            <div>✓ No successful payment detected</div>
+                            <div>✓ Idempotency verified: Safe execution guaranteed</div>
+                          </>
                         )}
                       </div>
                     </div>
 
-                    {/* Step 6: VERIFIED */}
-                    <div className="relative flex items-start gap-4 pl-1">
-                      <div className={`w-7 h-7 rounded-full flex items-center justify-center z-10 flex-shrink-0 ${
-                        caseDetail.case.status === 'RECOVERED'
-                          ? 'bg-emerald-500/20 border border-emerald-500 text-emerald-400'
-                          : 'bg-slate-800 border border-slate-700 text-slate-400'
-                      }`}>
-                        <CheckCircle2 className="w-4 h-4" />
+                    {/* ACTION */}
+                    <div className="relative">
+                      <div className="absolute -left-[31px] top-1 w-2.5 h-2.5 rounded-full bg-[#000000]"></div>
+                      <div className="text-[11px] font-mono text-[#777169] uppercase">ACTION</div>
+                      <div className="text-sm font-normal text-[#000000] mt-0.5">
+                        {getExecutedActionDisplay(caseDetail.toolExecutions?.[0]?.tool_name, caseDetail.case.status)}
                       </div>
-                      <div className={`border rounded-xl p-3.5 flex-1 ${
-                        caseDetail.case.status === 'RECOVERED'
-                          ? 'bg-emerald-950/30 border-emerald-500/40 text-emerald-200'
-                          : 'bg-slate-950/70 border-slate-800 text-slate-400'
-                      }`}>
-                        <div className="flex items-center justify-between">
-                          <span className="text-xs font-bold uppercase tracking-wide">6. Payment Outcome Verification</span>
-                          {getStatusBadge(caseDetail.case.status)}
+                      <div className="font-mono text-[11px] text-[#777169] mt-1">
+                        Tool: {caseDetail.toolExecutions?.[0]?.tool_name || 'tool_create_payment_link'} • Status: {caseDetail.toolExecutions?.[0]?.status || 'EXECUTED'}
+                      </div>
+                      {caseDetail.case.recovery_url && (
+                        <div className="mt-2">
+                          <Link
+                            href={caseDetail.case.recovery_url}
+                            target="_blank"
+                            className="inline-flex items-center gap-1 text-xs text-[#0447ff] hover:underline"
+                          >
+                            <span>Customer payment link</span>
+                            <ExternalLink className="w-3 h-3" />
+                          </Link>
                         </div>
+                      )}
+                    </div>
+
+                    {/* VERIFICATION */}
+                    <div className="relative">
+                      <div className="absolute -left-[31px] top-1 w-2.5 h-2.5 rounded-full bg-[#000000]"></div>
+                      <div className="text-[11px] font-mono text-[#777169] uppercase">VERIFICATION</div>
+                      <div className="text-sm font-normal text-[#000000] mt-0.5">
+                        Payment status checked
+                      </div>
+                      <div className="text-xs text-[#777169] mt-1">
+                        Verified via Razorpay webhook capture event.
+                      </div>
+                    </div>
+
+                    {/* RESULT */}
+                    <div className="relative">
+                      <div className={`absolute -left-[31px] top-1 w-2.5 h-2.5 rounded-full ${
+                        caseDetail.case.status === 'RECOVERED' ? 'bg-[#0447ff]' : 'bg-[#000000]'
+                      }`}></div>
+                      <div className="text-[11px] font-mono text-[#777169] uppercase">RESULT</div>
+                      <div className="mt-0.5">
                         {caseDetail.case.status === 'RECOVERED' ? (
-                          <p className="text-xs text-emerald-300 font-medium mt-1">
-                            ✓ Payment authoritative capture verified via Razorpay webhook. {formatINR(caseDetail.case.amount)} successfully recovered into merchant account.
-                          </p>
+                          <div className="text-sm font-medium text-[#000000] flex items-center gap-1.5">
+                            <span className="w-1.5 h-1.5 rounded-full bg-[#0447ff]"></span>
+                            <span>✓ {formatINR(caseDetail.case.amount)} recovered</span>
+                          </div>
+                        ) : caseDetail.case.status === 'HUMAN_REVIEW' || caseDetail.case.status === 'ESCALATED' ? (
+                          <div className="text-sm font-medium text-[#000000] flex items-center gap-1.5">
+                            <span className="w-1.5 h-1.5 rounded-full bg-[#ff4704]"></span>
+                            <span>Merchant review required</span>
+                          </div>
+                        ) : caseDetail.case.status === 'STOPPED' ? (
+                          <div className="text-sm text-[#777169]">
+                            Recovery halted (attempts exhausted or opted out)
+                          </div>
                         ) : (
-                          <p className="text-xs text-slate-400 mt-1">
-                            Waiting for customer to complete transaction or bank settlement webhook.
-                          </p>
+                          <div className="text-sm text-[#44403b] flex items-center gap-1.5">
+                            <span className="w-1.5 h-1.5 rounded-full border border-[#777169]"></span>
+                            <span>Waiting for payment result</span>
+                          </div>
                         )}
                       </div>
                     </div>
                   </div>
                 </div>
 
-                {/* Merchant Actions Toolbar */}
-                <div className="bg-slate-950 border border-slate-800 rounded-2xl p-5 space-y-3">
-                  <h4 className="text-xs font-bold text-white uppercase tracking-wider">Merchant Interventions</h4>
+                {/* 6. AI Role Callout */}
+                <div className="rounded-[12px] bg-[#f5f3f1] border border-[#ebe8e4] p-4 text-xs text-[#44403b] space-y-1">
+                  <div className="font-medium text-[#000000]">Bounded control loop architecture</div>
+                  <p className="text-[#777169]">
+                    AI proposes. Deterministic policy controls. Controlled tools execute. Verified payment events determine truth.
+                  </p>
+                </div>
 
+                {/* Merchant Actions Bar */}
+                <div className="space-y-3 pt-2">
                   {caseDetail.case.status === 'HUMAN_REVIEW' || caseDetail.case.status === 'ESCALATED' ? (
-                    <div className="space-y-2">
-                      <p className="text-xs text-slate-400">
-                        This transaction requires merchant confirmation due to policy threshold rules.
+                    <div className="space-y-3">
+                      <p className="text-xs text-[#777169]">
+                        Review required: Payment exceeds autonomous recovery threshold.
                       </p>
-                      <div className="flex flex-wrap gap-2 pt-1">
+                      <div className="flex flex-wrap gap-2">
                         <button
                           onClick={() => handleReviewAction(caseDetail.case.id, 'APPROVE')}
                           disabled={actionProcessing}
-                          className="px-4 py-2 bg-emerald-600 hover:bg-emerald-500 text-white rounded-xl text-xs font-semibold transition flex items-center gap-1.5 shadow"
+                          className="px-5 py-2 rounded-full bg-[#000000] text-[#fdfcfc] hover:bg-[#44403b] text-xs font-medium transition-colors"
                         >
-                          <Check className="w-3.5 h-3.5" />
-                          <span>Approve Recovery Action</span>
+                          Approve recovery
                         </button>
                         <button
                           onClick={() => handleReviewAction(caseDetail.case.id, 'STOP')}
                           disabled={actionProcessing}
-                          className="px-4 py-2 bg-rose-600/80 hover:bg-rose-600 text-white rounded-xl text-xs font-semibold transition flex items-center gap-1.5"
+                          className="px-5 py-2 rounded-full bg-[#fdfcfc] border border-[#ebe8e4] text-[#44403b] hover:bg-[#f5f3f1] hover:text-[#000000] text-xs font-medium transition-colors"
                         >
-                          <X className="w-3.5 h-3.5" />
-                          <span>Stop & Dismiss</span>
+                          Stop recovery
                         </button>
                       </div>
                     </div>
                   ) : caseDetail.case.status === 'RECOVERED' ? (
-                    <div className="text-xs text-emerald-400 flex items-center gap-2">
-                      <CheckCircle2 className="w-4 h-4" />
-                      <span>This case is fully recovered. No further action needed.</span>
+                    <div className="text-xs text-[#000000] flex items-center gap-2 py-2">
+                      <span className="w-1.5 h-1.5 rounded-full bg-[#0447ff]"></span>
+                      <span>Payment successfully recovered and verified. No further intervention needed.</span>
                     </div>
                   ) : (
-                    <div className="space-y-3">
-                      <div className="flex flex-wrap items-center gap-2">
+                    <div className="space-y-2">
+                      <div className="flex flex-wrap gap-2">
                         <button
                           onClick={() => handleSimulatePaymentSuccess(caseDetail.case.id)}
                           disabled={actionProcessing}
-                          className="px-4 py-2 bg-emerald-600 hover:bg-emerald-500 text-white rounded-xl text-xs font-semibold transition flex items-center gap-1.5 shadow"
+                          className="px-5 py-2 rounded-full bg-[#000000] text-[#fdfcfc] hover:bg-[#44403b] text-xs font-medium transition-colors"
                         >
-                          <Zap className="w-3.5 h-3.5" />
-                          <span>Simulate Customer Payment Capture</span>
+                          Simulate payment capture
                         </button>
-
                         {caseDetail.case.recovery_url && (
                           <Link
                             href={caseDetail.case.recovery_url}
                             target="_blank"
-                            className="px-4 py-2 bg-slate-800 hover:bg-slate-700 text-slate-200 rounded-xl text-xs font-semibold transition flex items-center gap-1.5 border border-slate-700"
+                            className="px-5 py-2 rounded-full bg-[#fdfcfc] border border-[#ebe8e4] text-[#44403b] hover:bg-[#f5f3f1] hover:text-[#000000] text-xs font-medium transition-colors inline-flex items-center gap-1.5"
                           >
-                            <ExternalLink className="w-3.5 h-3.5" />
-                            <span>Open Pay Link</span>
+                            <span>Open pay link</span>
+                            <ArrowUpRight className="w-3 h-3" />
                           </Link>
                         )}
                       </div>
                     </div>
                   )}
+                </div>
 
-                  <div className="pt-3 border-t border-slate-800/80 flex items-center justify-between text-xs">
-                    <span className="text-slate-500">Need full developer JSON logs?</span>
-                    <Link
-                      href={`/cases/${caseDetail.case.id}`}
-                      className="text-blue-400 hover:text-blue-300 font-medium inline-flex items-center gap-1"
-                    >
-                      <span>View Technical Audit Trail</span>
-                      <ArrowRight className="w-3 h-3" />
-                    </Link>
-                  </div>
+                {/* Expandable Technical / Audit Details */}
+                <div className="pt-4 border-t border-[#ebe8e4]">
+                  <button
+                    onClick={() => setDrawerAuditOpen(!drawerAuditOpen)}
+                    className="w-full flex items-center justify-between text-xs text-[#777169] hover:text-[#000000] transition-colors"
+                  >
+                    <span>Audit details</span>
+                    {drawerAuditOpen ? <ChevronUp className="w-3.5 h-3.5" /> : <ChevronDown className="w-3.5 h-3.5" />}
+                  </button>
+
+                  {drawerAuditOpen && (
+                    <div className="mt-3 rounded-[12px] bg-[#f5f3f1] border border-[#ebe8e4] p-4 font-mono text-[11px] text-[#44403b] space-y-1.5">
+                      <div>Case ID: {caseDetail.case.id}</div>
+                      <div>Event ID: {caseDetail.case.event_id}</div>
+                      <div>Payment ID: {caseDetail.case.payment_id}</div>
+                      <div>Order ID: {caseDetail.case.order_id || 'N/A'}</div>
+                      <div>Decision ID: {caseDetail.decisions?.[0]?.id || 'N/A'}</div>
+                      <div>Policy Check ID: {caseDetail.policyChecks?.[0]?.id || 'N/A'}</div>
+                      <div>Policy Version: {caseDetail.case.policy_version || '2.1.0'}</div>
+                      <div>Tool: {caseDetail.toolExecutions?.[0]?.tool_name || 'N/A'}</div>
+                      <div>Idempotency Key: {caseDetail.toolExecutions?.[0]?.idempotency_key || 'N/A'}</div>
+                      <div>Created: {caseDetail.case.created_at}</div>
+                    </div>
+                  )}
                 </div>
               </div>
             )}

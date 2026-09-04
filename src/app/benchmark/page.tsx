@@ -2,6 +2,7 @@
 
 import React, { useEffect, useState } from 'react';
 import Link from 'next/link';
+import { Play, RefreshCw, Layers } from 'lucide-react';
 
 export default function BenchmarkStudioPage() {
   const [report, setReport] = useState<any>(null);
@@ -47,318 +48,326 @@ export default function BenchmarkStudioPage() {
   const strategies = report?.strategies || {};
 
   const formatINR = (paise: number) => {
-    return `₹${(paise / 100).toLocaleString('en-IN', { maximumFractionDigits: 0 })}`;
+    return `₹${Math.round(paise / 100).toLocaleString('en-IN', { maximumFractionDigits: 0 })}`;
   };
 
   return (
-    <div className="space-y-8">
-        
-        {/* Navigation Breadcrumb */}
-        <div className="flex items-center justify-between border-b border-slate-800 pb-4">
-          <div className="flex items-center space-x-3">
-            <Link href="/" className="text-slate-400 hover:text-white text-xs">
-              ← Back to Recovery Dashboard
-            </Link>
-            <span className="text-slate-600">/</span>
-            <span className="text-xs font-semibold text-slate-200">Synthetic Benchmark Studio</span>
-          </div>
-
-          <div className="flex items-center space-x-2 text-xs">
-            <span className="px-2.5 py-1 rounded bg-purple-500/10 text-purple-400 border border-purple-500/20 font-medium">
-              5-Way Strategy Comparison
-            </span>
-          </div>
+    <div className="space-y-8 pb-16">
+      {/* Navigation Breadcrumb */}
+      <div className="flex items-center justify-between border-b border-[#ebe8e4] pb-4">
+        <div className="flex items-center space-x-3 text-xs">
+          <Link href="/" className="text-[#777169] hover:text-[#000000] transition-colors">
+            ← Back to Dashboard
+          </Link>
+          <span className="text-[#ebe8e4]">/</span>
+          <span className="text-[#000000] font-normal">Benchmark & Ablation Studio</span>
         </div>
 
-        {/* Header */}
-        <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4 bg-gradient-to-r from-purple-950/40 via-slate-900 to-blue-950/40 border border-purple-900/40 rounded-2xl p-6 md:p-8 shadow-xl">
-          <div>
-            <h1 className="text-2xl md:text-3xl font-bold text-white tracking-tight">
-              Synthetic Benchmark & Ablation Analysis
-            </h1>
-            <p className="text-xs md:text-sm text-slate-400 mt-2 max-w-2xl">
-              Evaluates strategies over a seeded dataset with hidden latent customer intent and ground-truth recovery potential across 6 realistic archetypes.
-            </p>
-          </div>
+        <div className="flex items-center space-x-2 text-xs">
+          <span className="px-3 py-1 rounded-full bg-[#f5f3f1] border border-[#ebe8e4] text-[#44403b] text-[11px]">
+            5-Way Strategy Comparison
+          </span>
+        </div>
+      </div>
 
-          <div className="flex items-center space-x-3">
-            <div className="flex items-center space-x-2 bg-slate-950 border border-slate-800 rounded-xl px-3 py-2 text-xs">
-              <span className="text-slate-400">Cases:</span>
-              <select
-                value={totalCases}
-                onChange={(e) => setTotalCases(Number(e.target.value))}
-                className="bg-transparent text-white font-mono focus:outline-none"
-              >
-                <option value={1200} className="bg-slate-900">1,200 Cases</option>
-                <option value={2500} className="bg-slate-900">2,500 Cases</option>
-                <option value={5000} className="bg-slate-900">5,000 Cases</option>
-              </select>
-            </div>
+      {/* Hero / Page Header Card */}
+      <div className="rounded-[20px] bg-[#f5f3f1] border border-[#ebe8e4] p-6 sm:p-8 flex flex-col md:flex-row md:items-end md:justify-between gap-6">
+        <div>
+          <h1 className="text-2xl md:text-3xl font-light text-[#000000] tracking-tight">
+            Synthetic benchmark & ablation analysis
+          </h1>
+          <p className="text-xs md:text-sm text-[#44403b] mt-1.5 max-w-2xl font-normal leading-relaxed">
+            Evaluates recovery strategies over a seeded dataset with hidden latent customer intent and ground-truth recovery potential across 6 realistic archetypes.
+          </p>
+        </div>
 
-            <div className="flex items-center space-x-2 bg-slate-950 border border-slate-800 rounded-xl px-3 py-2 text-xs">
-              <span className="text-slate-400">Seed:</span>
-              <input
-                type="number"
-                value={seed}
-                onChange={(e) => setSeed(parseInt(e.target.value, 10) || 42)}
-                className="w-12 bg-transparent text-white font-mono focus:outline-none"
-              />
-            </div>
-
-            <button
-              onClick={runBenchmark}
-              disabled={running}
-              className="px-5 py-2.5 bg-purple-600 hover:bg-purple-500 disabled:opacity-50 text-white rounded-xl text-xs font-semibold shadow-lg shadow-purple-600/30 transition flex items-center space-x-2"
+        <div className="flex flex-wrap items-center gap-3">
+          <div className="flex items-center space-x-2 bg-[#fdfcfc] border border-[#ebe8e4] rounded-full px-3.5 py-1.5 text-xs">
+            <span className="text-[#777169]">Cases:</span>
+            <select
+              value={totalCases}
+              onChange={(e) => setTotalCases(Number(e.target.value))}
+              className="bg-transparent text-[#000000] focus:outline-none cursor-pointer"
             >
-              {running ? (
-                <span>Evaluating {totalCases.toLocaleString()} Cases...</span>
-              ) : (
-                <span>▶ Run Evaluation</span>
-              )}
-            </button>
+              <option value={1200}>1,200 Cases</option>
+              <option value={2500}>2,500 Cases</option>
+              <option value={5000}>5,000 Cases</option>
+            </select>
           </div>
-        </div>
 
-        {/* Results Matrix */}
-        {report ? (
-          <div className="space-y-6">
-            
-            {/* Top Strategy Metric Cards */}
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-              
-              {/* RecoverAI Hybrid Card */}
-              <div className="bg-gradient-to-br from-blue-950/50 via-slate-900 to-slate-900 border border-blue-500/50 rounded-2xl p-6 shadow-xl relative overflow-hidden">
+          <div className="flex items-center space-x-2 bg-[#fdfcfc] border border-[#ebe8e4] rounded-full px-3.5 py-1.5 text-xs">
+            <span className="text-[#777169]">Seed:</span>
+            <input
+              type="number"
+              value={seed}
+              onChange={(e) => setSeed(parseInt(e.target.value, 10) || 42)}
+              className="w-10 bg-transparent text-[#000000] font-mono focus:outline-none"
+            />
+          </div>
+
+          <button
+            onClick={runBenchmark}
+            disabled={running}
+            className="px-5 py-2 rounded-full bg-[#000000] text-[#fdfcfc] hover:bg-[#44403b] disabled:opacity-50 text-xs font-medium transition-colors inline-flex items-center gap-1.5"
+          >
+            {running ? (
+              <>
+                <RefreshCw className="w-3 h-3 animate-spin" />
+                <span>Evaluating {totalCases.toLocaleString()} Cases...</span>
+              </>
+            ) : (
+              <>
+                <Play className="w-3 h-3 fill-current" />
+                <span>Run evaluation</span>
+              </>
+            )}
+          </button>
+        </div>
+      </div>
+
+      {/* Results Section */}
+      {report ? (
+        <div className="space-y-6">
+          {/* Top 3 Strategy Metric Cards */}
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+            {/* RecoverAI Hybrid Card */}
+            <div className="rounded-[20px] bg-[#f5f3f1] border border-[#ebe8e4] p-6 shadow-none flex flex-col justify-between">
+              <div>
                 <div className="flex justify-between items-center mb-2">
-                  <span className="text-xs font-bold text-blue-400 uppercase tracking-wider">
-                    RecoverAI Hybrid
+                  <span className="text-xs font-normal text-[#000000] flex items-center gap-1.5">
+                    <span className="w-1.5 h-1.5 rounded-full bg-[#0447ff]"></span>
+                    <span>RecoverAI Hybrid</span>
                   </span>
-                  <span className="text-[10px] px-2 py-0.5 rounded bg-blue-500/20 text-blue-300 font-semibold border border-blue-500/30">
-                    RECOMMENDED SYSTEM
+                  <span className="text-[10px] px-2.5 py-0.5 rounded-full bg-[#fdfcfc] border border-[#ebe8e4] text-[#44403b]">
+                    Controlled System
                   </span>
                 </div>
-                <div className="text-xs text-slate-400 font-mono">Net Recovery Value (NRV):</div>
-                <div className="text-3xl font-extrabold text-white mt-0.5">
+                <div className="text-xs text-[#777169] mt-3">Net Recovery Value (NRV):</div>
+                <div className="text-3xl font-light text-[#000000] mt-0.5 tracking-tight">
                   {formatINR(strategies.recoverai_hybrid?.totalNetRecoveredRevenue || strategies.recoverai_hybrid?.totalRecoveredRevenue || 0)}
                 </div>
-                <div className="text-xs text-slate-400 mt-3 space-y-1.5 border-t border-slate-800/80 pt-3">
-                  <div className="flex justify-between">
-                    <span>Gross Revenue Recovered:</span>
-                    <span className="text-white font-semibold">{formatINR(strategies.recoverai_hybrid?.totalRecoveredRevenue || 0)}</span>
-                  </div>
-                  <div className="flex justify-between">
-                    <span>Total Operational Costs:</span>
-                    <span className="text-slate-300 font-mono">{formatINR(strategies.recoverai_hybrid?.totalCosts || 0)}</span>
-                  </div>
-                  <div className="flex justify-between">
-                    <span>Safety Fines / Penalties:</span>
-                    <span className="text-emerald-400 font-bold">₹0 (0 breaches) ✓</span>
-                  </div>
-                  <div className="flex justify-between pt-1 border-t border-slate-800/40">
-                    <span className="text-blue-300 font-semibold">Net Incremental vs Baseline:</span>
-                    <span className="text-emerald-400 font-bold">
-                      +{formatINR(strategies.recoverai_hybrid?.incrementalNetRevenueVsRuleBaseline || strategies.recoverai_hybrid?.incrementalRevenueVsRuleBaseline || 0)}
-                    </span>
-                  </div>
-                </div>
               </div>
 
-              {/* Fixed Rule Baseline Card */}
-              <div className="bg-slate-900 border border-slate-800 rounded-2xl p-6 shadow-xl">
-                <div className="flex justify-between items-center mb-2">
-                  <span className="text-xs font-bold text-slate-400 uppercase tracking-wider">
-                    Fixed Rule Baseline
-                  </span>
-                  <span className="text-[10px] px-2 py-0.5 rounded bg-slate-800 text-slate-400">
-                    BENCHMARK CONTROL
+              <div className="text-xs text-[#44403b] mt-5 space-y-2 border-t border-[#ebe8e4] pt-4">
+                <div className="flex justify-between">
+                  <span className="text-[#777169]">Gross Recovered:</span>
+                  <span className="text-[#000000]">{formatINR(strategies.recoverai_hybrid?.totalRecoveredRevenue || 0)}</span>
+                </div>
+                <div className="flex justify-between">
+                  <span className="text-[#777169]">Operational Costs:</span>
+                  <span className="text-[#44403b] font-mono text-[11px]">{formatINR(strategies.recoverai_hybrid?.totalCosts || 0)}</span>
+                </div>
+                <div className="flex justify-between">
+                  <span className="text-[#777169]">Safety Penalties:</span>
+                  <span className="text-[#000000]">₹0 (0 breaches) ✓</span>
+                </div>
+                <div className="flex justify-between pt-2 border-t border-[#ebe8e4]/60">
+                  <span className="font-normal text-[#000000]">Net Incremental vs Baseline:</span>
+                  <span className="font-medium text-[#000000]">
+                    +{formatINR(strategies.recoverai_hybrid?.incrementalNetRevenueVsRuleBaseline || strategies.recoverai_hybrid?.incrementalRevenueVsRuleBaseline || 0)}
                   </span>
                 </div>
-                <div className="text-xs text-slate-400 font-mono">Net Recovery Value (NRV):</div>
-                <div className="text-3xl font-extrabold text-slate-200 mt-0.5">
+              </div>
+            </div>
+
+            {/* Fixed Rule Baseline Card */}
+            <div className="rounded-[20px] bg-[#f5f3f1] border border-[#ebe8e4] p-6 shadow-none flex flex-col justify-between">
+              <div>
+                <div className="flex justify-between items-center mb-2">
+                  <span className="text-xs font-normal text-[#000000] flex items-center gap-1.5">
+                    <span className="w-1.5 h-1.5 rounded-full border border-[#777169]"></span>
+                    <span>Fixed Rule Baseline</span>
+                  </span>
+                  <span className="text-[10px] px-2.5 py-0.5 rounded-full bg-[#fdfcfc] border border-[#ebe8e4] text-[#777169]">
+                    Benchmark Control
+                  </span>
+                </div>
+                <div className="text-xs text-[#777169] mt-3">Net Recovery Value (NRV):</div>
+                <div className="text-3xl font-light text-[#000000] mt-0.5 tracking-tight">
                   {formatINR(strategies.fixed_rule_baseline?.totalNetRecoveredRevenue || strategies.fixed_rule_baseline?.totalRecoveredRevenue || 0)}
                 </div>
-                <div className="text-xs text-slate-400 mt-3 space-y-1.5 border-t border-slate-800/80 pt-3">
-                  <div className="flex justify-between">
-                    <span>Gross Revenue Recovered:</span>
-                    <span className="text-slate-300 font-semibold">{formatINR(strategies.fixed_rule_baseline?.totalRecoveredRevenue || 0)}</span>
-                  </div>
-                  <div className="flex justify-between">
-                    <span>Total Operational Costs:</span>
-                    <span className="text-slate-400 font-mono">{formatINR(strategies.fixed_rule_baseline?.totalCosts || 0)}</span>
-                  </div>
-                  <div className="flex justify-between">
-                    <span>Safety Violations:</span>
-                    <span className="text-slate-300 font-semibold">0 violations</span>
-                  </div>
-                  <div className="flex justify-between pt-1 border-t border-slate-800/40">
-                    <span>Net Incremental:</span>
-                    <span className="text-slate-500 font-mono">₹0 (Baseline)</span>
-                  </div>
-                </div>
               </div>
 
-              {/* LLM Only Strategy Card */}
-              <div className="bg-slate-900 border border-rose-500/30 rounded-2xl p-6 shadow-xl">
+              <div className="text-xs text-[#44403b] mt-5 space-y-2 border-t border-[#ebe8e4] pt-4">
+                <div className="flex justify-between">
+                  <span className="text-[#777169]">Gross Recovered:</span>
+                  <span className="text-[#000000]">{formatINR(strategies.fixed_rule_baseline?.totalRecoveredRevenue || 0)}</span>
+                </div>
+                <div className="flex justify-between">
+                  <span className="text-[#777169]">Operational Costs:</span>
+                  <span className="text-[#44403b] font-mono text-[11px]">{formatINR(strategies.fixed_rule_baseline?.totalCosts || 0)}</span>
+                </div>
+                <div className="flex justify-between">
+                  <span className="text-[#777169]">Safety Penalties:</span>
+                  <span className="text-[#000000]">₹0 (0 breaches)</span>
+                </div>
+                <div className="flex justify-between pt-2 border-t border-[#ebe8e4]/60">
+                  <span className="text-[#777169]">Net Incremental:</span>
+                  <span className="text-[#777169] font-mono text-[11px]">₹0 (Reference)</span>
+                </div>
+              </div>
+            </div>
+
+            {/* LLM Only Card */}
+            <div className="rounded-[20px] bg-[#f5f3f1] border border-[#ebe8e4] p-6 shadow-none flex flex-col justify-between">
+              <div>
                 <div className="flex justify-between items-center mb-2">
-                  <span className="text-xs font-bold text-rose-400 uppercase tracking-wider">
-                    LLM-Only (No Guardrails)
+                  <span className="text-xs font-normal text-[#000000] flex items-center gap-1.5">
+                    <span className="w-1.5 h-1.5 rounded-full bg-[#ff4704]"></span>
+                    <span>LLM-Only (No Guardrails)</span>
                   </span>
-                  <span className="text-[10px] px-2 py-0.5 rounded bg-rose-500/20 text-rose-400 font-semibold">
-                    HIGH FINANCIAL RISK
+                  <span className="text-[10px] px-2.5 py-0.5 rounded-full bg-[#fdfcfc] border border-[#ebe8e4] text-[#ff4704]">
+                    Unconstrained
                   </span>
                 </div>
-                <div className="text-xs text-slate-400 font-mono">Net Recovery Value (NRV):</div>
-                <div className="text-3xl font-extrabold text-slate-200 mt-0.5">
+                <div className="text-xs text-[#777169] mt-3">Net Recovery Value (NRV):</div>
+                <div className="text-3xl font-light text-[#000000] mt-0.5 tracking-tight">
                   {formatINR(strategies.llm_only?.totalNetRecoveredRevenue || strategies.llm_only?.totalRecoveredRevenue || 0)}
                 </div>
-                <div className="text-xs text-slate-400 mt-3 space-y-1.5 border-t border-slate-800/80 pt-3">
-                  <div className="flex justify-between">
-                    <span>Gross Revenue Recovered:</span>
-                    <span className="text-slate-300 font-semibold">{formatINR(strategies.llm_only?.totalRecoveredRevenue || 0)}</span>
-                  </div>
-                  <div className="flex justify-between">
-                    <span>Total Operational Costs:</span>
-                    <span className="text-rose-300 font-mono">{formatINR(strategies.llm_only?.totalCosts || 0)}</span>
-                  </div>
-                  <div className="flex justify-between">
-                    <span>Safety Fines / Penalties:</span>
-                    <span className="text-rose-400 font-bold">
-                      {formatINR(strategies.llm_only?.safetyPenalties || 0)} ({strategies.llm_only?.policyViolations} fines)
-                    </span>
-                  </div>
-                  <div className="flex justify-between pt-1 border-t border-slate-800/40">
-                    <span className="text-rose-400">Net Incremental vs Baseline:</span>
-                    <span className={strategies.llm_only?.incrementalNetRevenueVsRuleBaseline < 0 ? 'text-rose-400 font-bold' : 'text-slate-300'}>
-                      {formatINR(strategies.llm_only?.incrementalNetRevenueVsRuleBaseline || 0)}
-                    </span>
-                  </div>
-                </div>
               </div>
 
+              <div className="text-xs text-[#44403b] mt-5 space-y-2 border-t border-[#ebe8e4] pt-4">
+                <div className="flex justify-between">
+                  <span className="text-[#777169]">Gross Recovered:</span>
+                  <span className="text-[#000000]">{formatINR(strategies.llm_only?.totalRecoveredRevenue || 0)}</span>
+                </div>
+                <div className="flex justify-between">
+                  <span className="text-[#777169]">Operational Costs:</span>
+                  <span className="text-[#44403b] font-mono text-[11px]">{formatINR(strategies.llm_only?.totalCosts || 0)}</span>
+                </div>
+                <div className="flex justify-between">
+                  <span className="text-[#777169]">Safety Penalties:</span>
+                  <span className="text-[#000000]">
+                    {formatINR(strategies.llm_only?.safetyPenalties || 0)} ({strategies.llm_only?.policyViolations} fines)
+                  </span>
+                </div>
+                <div className="flex justify-between pt-2 border-t border-[#ebe8e4]/60">
+                  <span className="text-[#777169]">Net Incremental vs Baseline:</span>
+                  <span className="font-mono text-[11px] text-[#000000]">
+                    {formatINR(strategies.llm_only?.incrementalNetRevenueVsRuleBaseline || 0)}
+                  </span>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          {/* Detailed 5-Way Comparison Table */}
+          <div className="rounded-[20px] bg-[#f5f3f1] border border-[#ebe8e4] p-6 sm:p-8 space-y-5">
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 border-b border-[#ebe8e4] pb-4">
+              <div>
+                <h3 className="text-lg font-normal text-[#000000] tracking-tight">Full 5-Strategy Empirical Comparison</h3>
+                <p className="text-xs text-[#777169] mt-0.5">
+                  Evaluated over {report.heldOutTestCases?.toLocaleString()} held-out test cases with action-sensitive latent outcome engine.
+                </p>
+              </div>
+              <div className="text-[11px] text-[#777169] font-mono">
+                NRV = Gross Recovered - Operational Costs - Friction - Penalties
+              </div>
             </div>
 
-            {/* Detailed 5-Way Comparison Table */}
-            <div className="bg-slate-900 border border-slate-800 rounded-2xl shadow-xl overflow-hidden">
-              <div className="p-5 border-b border-slate-800 flex flex-col sm:flex-row sm:items-center justify-between gap-2">
-                <div>
-                  <h3 className="text-base font-bold text-white">Full 5-Strategy Empirical Comparison</h3>
-                  <p className="text-xs text-slate-400 mt-0.5">
-                    Evaluated over {report.heldOutTestCases?.toLocaleString()} held-out test cases with action-sensitive latent outcome engine.
-                  </p>
-                </div>
-                <div className="text-[11px] text-slate-400 bg-slate-950 px-3 py-1.5 rounded-lg border border-slate-800 font-mono">
-                  NRV = Gross Recovered - Costs - Friction - Penalties
-                </div>
-              </div>
-
-              <div className="overflow-x-auto">
-                <table className="w-full text-left border-collapse text-xs">
-                  <thead>
-                    <tr className="bg-slate-950/60 border-b border-slate-800 text-slate-400 font-medium">
-                      <th className="p-4">Strategy</th>
-                      <th className="p-4">Gross Recovered</th>
-                      <th className="p-4 text-emerald-300 font-bold">Net Recovery Value</th>
-                      <th className="p-4">Operational Costs</th>
-                      <th className="p-4">Safety Fines</th>
-                      <th className="p-4">Net Incr. vs Baseline</th>
-                      <th className="p-4">Policy Breaches</th>
-                    </tr>
-                  </thead>
-                  <tbody className="divide-y divide-slate-800/60 text-slate-200">
-                    {Object.entries(strategies).map(([name, m]: [string, any]) => (
-                      <tr
-                        key={name}
-                        className={name === 'recoverai_hybrid' ? 'bg-blue-950/20 font-semibold' : 'hover:bg-slate-800/20'}
-                      >
-                        <td className="p-4 font-mono">
-                          {name === 'recoverai_hybrid' ? (
-                            <span className="text-blue-400 font-bold">★ recoverai_hybrid</span>
-                          ) : (
-                            name
-                          )}
-                        </td>
-                        <td className="p-4 font-semibold text-slate-300">{formatINR(m.totalRecoveredRevenue)}</td>
-                        <td className="p-4 font-bold text-white text-sm">
-                          {formatINR(m.totalNetRecoveredRevenue || m.totalRecoveredRevenue)}
-                        </td>
-                        <td className="p-4 font-mono text-slate-400">{formatINR(m.totalCosts || 0)}</td>
-                        <td className="p-4 font-mono">
-                          {m.safetyPenalties > 0 ? (
-                            <span className="text-rose-400 font-bold">{formatINR(m.safetyPenalties)}</span>
-                          ) : (
-                            <span className="text-emerald-400">₹0</span>
-                          )}
-                        </td>
-                        <td className="p-4">
-                          <span
-                            className={
-                              (m.incrementalNetRevenueVsRuleBaseline || m.incrementalRevenueVsRuleBaseline) > 0
-                                ? 'text-emerald-400 font-semibold'
-                                : (m.incrementalNetRevenueVsRuleBaseline || m.incrementalRevenueVsRuleBaseline) === 0
-                                ? 'text-slate-400'
-                                : 'text-rose-400 font-semibold'
-                            }
-                          >
-                            {(m.incrementalNetRevenueVsRuleBaseline || m.incrementalRevenueVsRuleBaseline) > 0 ? '+' : ''}
-                            {formatINR(m.incrementalNetRevenueVsRuleBaseline || m.incrementalRevenueVsRuleBaseline)}
+            <div className="overflow-x-auto">
+              <table className="w-full text-left border-collapse text-xs">
+                <thead>
+                  <tr className="border-b border-[#ebe8e4] text-[#777169] font-normal">
+                    <th className="pb-3 pr-4 font-normal">Strategy</th>
+                    <th className="pb-3 px-4 font-normal">Gross Recovered</th>
+                    <th className="pb-3 px-4 font-normal">Net Recovery Value</th>
+                    <th className="pb-3 px-4 font-normal">Operational Costs</th>
+                    <th className="pb-3 px-4 font-normal">Safety Fines</th>
+                    <th className="pb-3 px-4 font-normal">Net Incr. vs Baseline</th>
+                    <th className="pb-3 pl-4 font-normal">Policy Breaches</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-[#ebe8e4]/60 text-[#44403b]">
+                  {Object.entries(strategies).map(([name, m]: [string, any]) => (
+                    <tr
+                      key={name}
+                      className={name === 'recoverai_hybrid' ? 'bg-[#ebe8e4]/40 font-medium' : 'hover:bg-[#ebe8e4]/20 transition-colors'}
+                    >
+                      <td className="py-3.5 pr-4 font-mono text-xs">
+                        {name === 'recoverai_hybrid' ? (
+                          <span className="text-[#000000] font-medium flex items-center gap-1.5">
+                            <span className="w-1.5 h-1.5 rounded-full bg-[#0447ff]"></span>
+                            <span>recoverai_hybrid</span>
                           </span>
-                        </td>
-                        <td className="p-4">
-                          {m.policyViolations > 0 ? (
-                            <span className="px-2 py-0.5 bg-rose-500/20 text-rose-400 border border-rose-500/30 rounded font-bold">
-                              {m.policyViolations} breaches
-                            </span>
-                          ) : (
-                            <span className="text-emerald-400 font-semibold">0 violations ✓</span>
-                          )}
-                        </td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
+                        ) : (
+                          name
+                        )}
+                      </td>
+                      <td className="py-3.5 px-4 text-[#000000]">{formatINR(m.totalRecoveredRevenue)}</td>
+                      <td className="py-3.5 px-4 font-medium text-[#000000]">
+                        {formatINR(m.totalNetRecoveredRevenue || m.totalRecoveredRevenue)}
+                      </td>
+                      <td className="py-3.5 px-4 font-mono text-[11px] text-[#777169]">{formatINR(m.totalCosts || 0)}</td>
+                      <td className="py-3.5 px-4 font-mono text-[11px]">
+                        {m.safetyPenalties > 0 ? (
+                          <span className="text-[#000000]">{formatINR(m.safetyPenalties)}</span>
+                        ) : (
+                          <span className="text-[#777169]">₹0</span>
+                        )}
+                      </td>
+                      <td className="py-3.5 px-4 font-medium text-[#000000]">
+                        {(m.incrementalNetRevenueVsRuleBaseline || m.incrementalRevenueVsRuleBaseline) > 0 ? '+' : ''}
+                        {formatINR(m.incrementalNetRevenueVsRuleBaseline || m.incrementalRevenueVsRuleBaseline)}
+                      </td>
+                      <td className="py-3.5 pl-4">
+                        {m.policyViolations > 0 ? (
+                          <span className="inline-flex items-center gap-1 text-[11px] text-[#000000]">
+                            <span className="w-1.5 h-1.5 rounded-full bg-[#ff4704]"></span>
+                            <span>{m.policyViolations} breaches</span>
+                          </span>
+                        ) : (
+                          <span className="text-[#777169] text-[11px]">0 violations ✓</span>
+                        )}
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          </div>
+
+          {/* Economic Latent Model Transparency Panel */}
+          <div className="rounded-[20px] bg-[#f5f3f1] border border-[#ebe8e4] p-6 sm:p-8 space-y-4">
+            <div className="flex items-center justify-between border-b border-[#ebe8e4] pb-3">
+              <h4 className="text-sm font-normal text-[#000000]">
+                Latent economic evaluation model parameters
+              </h4>
+              <span className="text-[11px] text-[#777169] font-mono">Action-Sensitive Ground Truth</span>
+            </div>
+            <p className="text-xs text-[#44403b] leading-relaxed">
+              Rather than using static success probabilities, the benchmark generates seeded synthetic transaction streams where each customer has hidden latent willingness to pay, friction tolerance, and payment instrument validity.
+            </p>
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-3 text-xs">
+              <div className="rounded-[16px] bg-[#fdfcfc] border border-[#ebe8e4] p-4">
+                <div className="text-[11px] font-mono text-[#777169] uppercase">Outreach Fees</div>
+                <div className="text-[#000000] mt-1">₹0.50 per WhatsApp/SMS outreach, ₹2.00 per direct bank gateway retry.</div>
+              </div>
+              <div className="rounded-[16px] bg-[#fdfcfc] border border-[#ebe8e4] p-4">
+                <div className="text-[11px] font-mono text-[#777169] uppercase">Customer Friction Cost</div>
+                <div className="text-[#000000] mt-1">₹50 friction fee when retrying hard declines or spamming repeat notifications.</div>
+              </div>
+              <div className="rounded-[16px] bg-[#fdfcfc] border border-[#ebe8e4] p-4">
+                <div className="text-[11px] font-mono text-[#777169] uppercase">Statutory Penalties</div>
+                <div className="text-[#000000] mt-1">₹1,000 regulatory fine per opt-out customer contacted or double-charge attempt.</div>
               </div>
             </div>
-
-            {/* Economic Latent Model Transparency Panel */}
-            <div className="bg-slate-900 border border-slate-800 rounded-2xl p-6 shadow-xl space-y-4">
-              <div className="flex items-center justify-between border-b border-slate-800 pb-3">
-                <h4 className="text-sm font-bold text-white flex items-center space-x-2">
-                  <span>🔬 Latent Economic Evaluation Model</span>
-                </h4>
-                <span className="text-[10px] text-slate-400 font-mono">Rigorous Action-Sensitive Ground Truth</span>
-              </div>
-              <p className="text-xs text-slate-300 leading-relaxed">
-                Rather than using static success probabilities, the benchmark generates seeded synthetic transaction streams where each customer has hidden latent willingness to pay, friction tolerance, and payment instrument validity.
-              </p>
-              <div className="grid grid-cols-1 md:grid-cols-3 gap-3 text-xs">
-                <div className="bg-slate-950 p-3 rounded-xl border border-slate-800">
-                  <div className="text-[10px] font-bold uppercase text-slate-400">Outreach Fees</div>
-                  <div className="text-slate-200 mt-1">₹0.50 per WhatsApp/SMS outreach, ₹2.00 per direct bank gateway retry.</div>
-                </div>
-                <div className="bg-slate-950 p-3 rounded-xl border border-slate-800">
-                  <div className="text-[10px] font-bold uppercase text-slate-400">Customer Friction Cost</div>
-                  <div className="text-slate-200 mt-1">₹50 friction fee when retrying hard declines or spamming repeat notifications.</div>
-                </div>
-                <div className="bg-slate-950 p-3 rounded-xl border border-slate-800">
-                  <div className="text-[10px] font-bold uppercase text-rose-400">Statutory Penalties</div>
-                  <div className="text-rose-200 mt-1">₹1,000 regulatory fine per opt-out customer contacted or double-charge attempt.</div>
-                </div>
-              </div>
-            </div>
-
           </div>
-        ) : (
-          <div className="p-16 text-center text-slate-400 bg-slate-900 border border-slate-800 rounded-2xl">
-            <p className="text-sm font-medium text-slate-300 mb-2">No benchmark run available yet</p>
-            <p className="text-xs text-slate-400 mb-6">Click "Run Evaluation" above to execute the 5,000-case comparison.</p>
-            <button
-              onClick={runBenchmark}
-              disabled={running}
-              className="px-6 py-2.5 bg-purple-600 hover:bg-purple-500 text-white font-semibold rounded-xl text-xs shadow-lg shadow-purple-600/30 transition"
-            >
-              ▶ Execute Synthetic Benchmark Now
-            </button>
-          </div>
-        )}
+        </div>
+      ) : (
+        <div className="py-16 text-center text-xs text-[#777169] rounded-[20px] bg-[#f5f3f1] border border-[#ebe8e4]">
+          <Layers className="w-8 h-8 mx-auto mb-2 text-[#777169]" />
+          <p className="text-sm font-normal text-[#000000] mb-1">No benchmark run available yet</p>
+          <p className="max-w-sm mx-auto text-[#777169] mb-5">Click "Run evaluation" above to execute the 5,000-case comparison.</p>
+          <button
+            onClick={runBenchmark}
+            disabled={running}
+            className="px-6 py-2.5 rounded-full bg-[#000000] text-[#fdfcfc] hover:bg-[#44403b] text-xs font-medium transition-colors"
+          >
+            Execute Synthetic Benchmark Now
+          </button>
+        </div>
+      )}
     </div>
   );
 }
