@@ -33,10 +33,12 @@ export class FixedRuleBaselineStrategy implements EvaluationStrategy {
       action = 'OFFER_ALTERNATE_PAYMENT_METHOD';
     }
 
-    const outcome = LatentEngine.evaluateActionOutcome(action, c._hidden_latent, c.amount);
+    const outcome = LatentEngine.evaluateActionOutcome(action, c._hidden_latent, c.amount, {
+      consent_status: c.consent_status,
+    });
     const end = performance.now();
 
-    const isPolicyViolation = c.consent_status === 'OPTED_OUT' && action !== 'STOP';
+    const isPolicyViolation = outcome.isPolicyViolation;
 
     return {
       caseId: c.id,
@@ -46,10 +48,12 @@ export class FixedRuleBaselineStrategy implements EvaluationStrategy {
       policyResult: 'RULE_BASED',
       recovered: outcome.recovered,
       recoveredAmount: outcome.recoveredAmount,
+      netRecoveryValue: outcome.netRecoveryValue,
       isPolicyViolation,
       isUnnecessaryIntervention: outcome.isUnnecessaryIntervention,
       isHardDeclineRetry: outcome.isHardDeclineRetry,
       executionTimeMs: Number((end - start).toFixed(2)),
+      costs: outcome.costs,
       diagnosis: `Static rule mapping for ${c.failure_code}`,
       rationale: 'Executed deterministic merchant routing rule.',
     };

@@ -65,6 +65,7 @@ export class BenchmarkRunner {
     const ruleBaselineOutcomes = outcomesMap['fixed_rule_baseline'];
     const ruleBaselineMetrics = MetricsCalculator.computeMetrics('fixed_rule_baseline', ruleBaselineOutcomes);
     const ruleBaselineRevenue = ruleBaselineMetrics.totalRecoveredRevenue;
+    const ruleBaselineNetRevenue = ruleBaselineMetrics.totalNetRecoveredRevenue;
 
     const metricsMap: Record<string, StrategyMetrics> = {};
     for (const strat of strategies) {
@@ -72,7 +73,8 @@ export class BenchmarkRunner {
       metricsMap[name] = MetricsCalculator.computeMetrics(
         name,
         outcomesMap[name],
-        ruleBaselineRevenue
+        ruleBaselineRevenue,
+        ruleBaselineNetRevenue
       );
     }
 
@@ -97,7 +99,7 @@ export class BenchmarkRunner {
         incrementalPercentage: hybridMetrics.incrementalPercentageVsRuleBaseline,
         hybridSafetyViolations: hybridMetrics.policyViolations,
         llmOnlySafetyViolations: llmMetrics.policyViolations,
-        conclusion: `RecoverAI Hybrid achieved ${hybridMetrics.incrementalPercentageVsRuleBaseline >= 0 ? '+' : ''}${hybridMetrics.incrementalPercentageVsRuleBaseline}% incremental revenue over fixed rules with 0 policy violations (vs ${llmMetrics.policyViolations} violations in LLM-only).`,
+        conclusion: `RecoverAI Hybrid achieved ${hybridMetrics.incrementalNetPercentageVsRuleBaseline >= 0 ? '+' : ''}${hybridMetrics.incrementalNetPercentageVsRuleBaseline}% incremental net recovery revenue over fixed rules with 0 policy violations (vs ${llmMetrics.policyViolations} violations in LLM-only).`,
       },
     };
 

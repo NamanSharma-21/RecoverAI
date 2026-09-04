@@ -15,13 +15,12 @@ export class NaiveBaselineStrategy implements EvaluationStrategy {
     const start = performance.now();
     const action: ApprovedAction = c.attempt_count <= 3 ? 'RETRY' : 'STOP';
 
-    const outcome = LatentEngine.evaluateActionOutcome(action, c._hidden_latent, c.amount);
+    const outcome = LatentEngine.evaluateActionOutcome(action, c._hidden_latent, c.amount, {
+      consent_status: c.consent_status,
+    });
     const end = performance.now();
 
-    // Naive strategy has policy violations because it ignores opt-outs, hard declines, and high amounts
-    const isPolicyViolation =
-      c.consent_status === 'OPTED_OUT' ||
-      (action === 'RETRY' && (c.failure_code.includes('EXPIRED') || c.failure_code.includes('BLOCKED')));
+    const isPolicyViolation = outcome.isPolicyViolation;
 
     return {
       caseId: c.id,
@@ -31,10 +30,12 @@ export class NaiveBaselineStrategy implements EvaluationStrategy {
       policyResult: 'NO_POLICY',
       recovered: outcome.recovered,
       recoveredAmount: outcome.recoveredAmount,
+      netRecoveryValue: outcome.netRecoveryValue,
       isPolicyViolation,
-      isUnnecessaryIntervention: outcome.isUnnecessaryIntervention || c.consent_status === 'OPTED_OUT',
+      isUnnecessaryIntervention: outcome.isUnnecessaryIntervention,
       isHardDeclineRetry: outcome.isHardDeclineRetry,
       executionTimeMs: Number((end - start).toFixed(2)),
+      costs: outcome.costs,
       diagnosis: 'Naive blanket retry heuristic',
       rationale: 'Always attempts gateway retry without contextual diagnosis.',
     };

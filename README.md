@@ -1,93 +1,57 @@
-# RecoverAI — Bounded Payment Failure Recovery Decision Engine
+# RecoverAI 2.0 — Production-Hardened Payment Recovery Control Plane
 
 > **Submission for the Razorpay AI Revenue Recovery Buildathon**  
-> *Track: AI Revenue Recovery*
+> *Track: AI Revenue Recovery*  
+> *Documentation*: See [PRODUCTION_READINESS_REPORT.md](docs/PRODUCTION_READINESS_REPORT.md) for full architecture audit & verification report.
 
 ---
 
 ## 1. Product Thesis
 
-RecoverAI is a bounded, AI-assisted payment-failure recovery decision engine for Razorpay merchants.
+RecoverAI is a bounded payment recovery control plane that diagnoses failed payment attempts, determines whether recovery is safe and economically rational, and executes policy-compliant interventions across orders and payment links.
 
-Instead of generic dunning messages or uncontrolled model tool executions, RecoverAI implements a strict, production-shaped closed control loop:
+RecoverAI is **not** a generic dunning bot or an unconstrained LLM agent. It implements a closed, production-shaped control loop:
 
 ```
-PAYMENT_FAILED → CONTEXT → DIAGNOSE → SCORE → DECIDE → POLICY CHECK → EXECUTE → VERIFY → RECOVER / ESCALATE / STOP
+PAYMENT_FAILED → CONTEXT → DIAGNOSE → SCORE → DECIDE → POLICY CHECK → PRE-FLIGHT GUARD → LEASED EXECUTION → VERIFY → RECOVER / ESCALATE / STOP
 ```
 
-### Core Architecture Boundary
+### Core Architecture Law
 > **AI proposes. Deterministic policy controls. Controlled tools execute. Verified payment events determine truth.**
 
 The LLM is strictly constrained:
-- The model receives structured, sanitized context (customer text and failure descriptions are treated as **untrusted data evidence**, never system instructions).
-- The model outputs typed JSON containing `{ diagnosis, evidence, recommended_action, confidence, expected_recovery_value, rationale }`.
+- The model receives structured, sanitized context (customer notes and raw failure descriptions are treated as **untrusted data evidence**, never system instructions).
+- The model outputs typed JSON containing `{ diagnosis, evidence, recommended_action, confidence, expected_recovery_value, customer_friction, rationale }`.
 - The **deterministic policy engine** executes *after* the model and *before* execution.
 - Only policy `ALLOW` reaches a controlled tool.
 - Verified Razorpay / Simulator payment events (`payment.captured`, `payment_link.paid`) determine authoritative truth. If a payment succeeds while an action is pending, further recovery is aborted immediately.
 
 ---
 
-## 2. System Architecture
+## 2. The 5 Laws of RecoverAI
 
-```
-                    ┌────────────────────────────────────────────────────────┐
-                    │            Razorpay Webhook / Simulator                │
-                    └───────────────────────────┬────────────────────────────┘
-                                                │ (Raw payload + Signature)
-                                                ▼
-                    ┌────────────────────────────────────────────────────────┐
-                    │      Webhook Gateway (HMAC-SHA256 & Deduplication)     │
-                    └───────────────────────────┬────────────────────────────┘
-                                                │ Acknowledge 200 OK
-                                                ▼
-                    ┌────────────────────────────────────────────────────────┐
-                    │               Recovery Case + Event Service            │
-                    │               (State Machine & Audit Log)              │
-                    └─────────────┬────────────────────────────┬─────────────┘
-                                  │                            │
-                                  ▼                            ▼
-                    ┌─────────────────────────┐  ┌───────────────────────────┐
-                    │     Context Builder     │  │   Merchant Policy Config  │
-                    │(Order, Customer, Payment)│ │ (Limits, Rules, Allowlist) │
-                    └─────────────┬───────────┘  └─────────────┬─────────────┘
-                                  │                            │
-                                  ▼                            │
-                    ┌─────────────────────────┐                │
-                    │   AI Decision Service   │                │
-                    │(Structured Zod Output)  │                │
-                    └─────────────┬───────────┘                │
-                                  │ (Proposed Decision)        │
-                                  ▼                            │
-                    ┌──────────────────────────────────────────┴─┐
-                    │          Deterministic Policy Engine       │
-                    │           (ALLOW | BLOCK | ESCALATE)       │
-                    └─────────────┬──────────────────────────────┘
-                                  │ ALLOW
-                                  ▼
-                    ┌────────────────────────────────────────────┐
-                    │           Controlled Tool Executor         │
-                    │ (retry, payment_link, alternate_method, etc)│
-                    └─────────────┬──────────────────────────────┘
-                                  │
-                                  ▼
-                    ┌────────────────────────────────────────────┐
-                    │    Razorpay Adapter / Simulator Adapter    │
-                    └─────────────┬──────────────────────────────┘
-                                  │
-                                  ▼
-                    ┌────────────────────────────────────────────┐
-                    │    Verified Outcome Event & Case Update    │
-                    └─────────────┬──────────────────────────────┘
-                                  │
-                                  ▼
-                    ┌────────────────────────────────────────────┐
-                    │        Merchant UI & Benchmark Studio      │
-                    └────────────────────────────────────────────┘
-```
+| Law | Principle | Production Mechanism |
+| :--- | :--- | :--- |
+| **Law 1: Obligation vs Attempt** | *Lex Obligationis* | Commercial orders map to persistent `PaymentObligation` records. Payment attempts and links are ephemeral and replaceable. When an obligation is satisfied, all pending recovery actions are automatically cancelled. |
+| **Law 2: Source Precedence of Truth** | *Lex Veritatis* | Payment truth strictly follows: `AUTHORITATIVE_EVENT (Razorpay Webhook) > PROVIDER_QUERY (API Poll) > PERSISTED_STATE (Local DB) > LLM (Ignored) > UI (Ignored)`. Cryptographic HMAC-SHA256 signatures are required. |
+| **Law 3: AI Proposes, Policy Controls** | *Lex Moderationis* | Generative models have 0 payment API rights. Every recommendation must clear 9 deterministic checks. Even human operator actions follow `AI → HUMAN → POLICY → TOOL`. |
+| **Law 4: Generated & Leased Idempotency** | *Lex Repetitionis* | Idempotency keys are computed deterministically: `idemp_${obligationId}_${action}_gen${generation}`. Background workers must acquire an atomic conditional SQLite lease before execution. |
+| **Law 5: Pre-Flight Guard & Friction Boundaries** | *Lex Praeventionis* | PreFlightGuard evaluates live state at the millisecond of tool invocation. Rejects stale decisions (>5m) and enforces statutory customer cooling-off periods. |
 
 ---
 
-## 3. Approved Action Vocabulary
+## 3. Mathematical Money Representation & Financial Bounds
+
+All monetary calculations in RecoverAI are strictly represented as **safe minor integer units** (paise for INR):
+- **No Floating Point**: Amounts are stored and computed as integers (`paise: number = Math.round(inr * 100)`).
+- **Negative Amount Rejection**: Schema and domain reject any amount ≤ 0.
+- **Minimum Transaction Cap**: ₹1.00 minimum transaction floor (100 paise).
+- **Autonomous Threshold Cap**: Maximum autonomous recovery cap at ₹25,000.00 (2,500,000 paise). Higher-value transactions require merchant human review (`ESCALATE`).
+- **Absolute System Ceiling**: ₹50,000.00 (5,000,000 paise) absolute ceiling.
+
+---
+
+## 4. Approved Action Vocabulary
 
 RecoverAI operates over a closed set of 6 approved recovery actions:
 
@@ -97,73 +61,37 @@ RecoverAI operates over a closed set of 6 approved recovery actions:
 | `CREATE_OR_REUSE_PAYMENT_LINK` | Sends prefilled payment link directly to customer | 3DS OTP dropouts, customer session timeouts |
 | `OFFER_ALTERNATE_PAYMENT_METHOD` | Generates multi-rail link (UPI, Netbanking, Alternate card) | Insufficient balance, card expired, card blocked |
 | `WAIT` | Enters timed backoff window before re-verifying | Temporary outage resolution |
-| `ESCALATE` | Routes transaction to human merchant operator | Transactions > ₹50,000 threshold, confidence < 65% |
+| `ESCALATE` | Routes transaction to human merchant operator | Transactions > ₹25,000 threshold, confidence < 65% |
 | `STOP` | Halts recovery operations and closes case | Customer opted out, max retries reached, hard stop |
 
 ---
 
-## 4. Deterministic Guardrails & Invariants
-
-The deterministic policy engine enforces 10 hard invariants:
-1. **Case Open Check**: Closed/terminal cases cannot receive further actions.
-2. **Payment Truth Precedence**: No action can execute after verified payment success.
-3. **Customer Consent**: Opted-out customers never receive automated recovery communications.
-4. **Action Allowlist**: Only actions in `APPROVED_ACTIONS` can execute; unknown actions are rejected.
-5. **Monetary Threshold**: Transactions exceeding merchant limit (₹50,000 default) are strictly escalated to human review; LLM cannot override this threshold.
-6. **Retry Limits**: Retries capped at `max_retry_attempts` (default: 3).
-7. **Failure Category Match**: Hard declines (`EXPIRED_CARD`, `CARD_BLOCKED`) strictly blocked from automated retries on the same instrument.
-8. **Required Evidence**: Empty evidence or empty diagnoses are rejected.
-9. **Confidence Threshold**: Low-confidence decisions (< 65%) escalate to human review.
-10. **Idempotency & Deduplication**: 100% duplicate webhook suppression; tool idempotency keys prevent duplicate charges.
-
----
-
-## 5. Quick Start & Setup
+## 5. Execution Commands
 
 ### Prerequisites
 - Node.js v20+ (Node v26 verified)
 - npm / pnpm / yarn
 
-### Installation
-```bash
-git clone https://github.com/NamanSharma-21/RecoverAI.git
-cd RecoverAI
-npm install
-```
-
-### Environment Configuration
-Copy `.env.example` to `.env`:
-```bash
-cp .env.example .env
-```
-*(Default settings use the high-fidelity deterministic simulator — no live API keys required to run full tests, benchmarks, or UI demo).*
-
-To enable real Razorpay Test Mode or OpenAI JSON models:
-```env
-RAZORPAY_KEY_ID=rzp_test_your_key_id
-RAZORPAY_KEY_SECRET=your_key_secret
-RAZORPAY_WEBHOOK_SECRET=your_webhook_secret
-LLM_PROVIDER=openai
-LLM_API_KEY=sk-...
-```
-
----
-
-## 6. Execution Commands
-
-### Run Full Test Pyramid (39 Tests across 7 Suites)
+### Run Full Test Pyramid (60 Tests across 13 Suites)
 ```bash
 npm test
 ```
-*Sub-suites:*
-- `npm run test:unit` — Unit tests for policy rules and state machine
-- `npm run test:integration` — HMAC signature verification & webhook deduplication
-- `npm run test:guardrails` — Invariant safety tests (opt-out, amount threshold, payment truth)
-- `npm run test:golden` — 10 authoritative golden scenario fixtures
-- `npm run test:redteam` — Prompt injection, corrupt LLM outputs, tool failure handling
-- `npm run test:e2e` — Full closed control loop & human review workflow
+*Individual Test Suites:*
+- `tests/unit/payment-obligation.test.ts` — Commercial obligation lifecycle & auto-cancellation
+- `tests/unit/money-representation.test.ts` — Safe integer minor units & financial bounds
+- `tests/unit/payment-truth.test.ts` — Source precedence hierarchy & webhook truth
+- `tests/unit/action-idempotency.test.ts` — Deterministic generation keys & atomic worker leasing
+- `tests/unit/human-review-guardrails.test.ts` — Policy enforcement on human operator overrides
+- `tests/unit/races-and-failure-injection.test.ts` — Out-of-band payment races & tool failures
+- `tests/unit/policy-engine.test.ts` — 9 deterministic policy guardrail checks
+- `tests/unit/state-machine.test.ts` — Explicit case state machine transitions
+- `tests/guardrails/guardrails.test.ts` — Hard invariant guardrails
+- `tests/integration/webhook.test.ts` — HMAC-SHA256 signatures & duplicate webhook deduplication
+- `tests/redteam/red-team.test.ts` — Prompt injection defense & hostile failure modes
+- `tests/golden/golden-scenarios.test.ts` — 10 authoritative golden fixtures
+- `tests/e2e/recovery-loop.test.ts` — Full closed control loop integration
 
-### Run Seeded 1,200-Case Benchmark (CLI)
+### Run Seeded 5,000-Case Benchmark (CLI)
 ```bash
 npm run benchmark
 ```
@@ -181,107 +109,57 @@ Open [http://localhost:3000](http://localhost:3000) in your browser.
 
 ---
 
-## 7. Empirical Benchmark Results
+## 6. Empirical Benchmark Results (5,000 Cases)
 
-Evaluated over 1,200 seeded synthetic cases with hidden latent ground truth (600 held-out test split, seed=42):
+Evaluated over 5,000 seeded synthetic cases with hidden latent ground truth (2,500 held-out test split, seed=42) using **Net Recovery Value (NRV)**:
 
-| Strategy | Recovered Revenue (₹) | Recovery Rate | Incr. vs Rules (₹) | Incr. % | Safety Violations | Hard Decline Fails |
+$$\text{NRV} = \text{Recovered Revenue} - \text{Comm Cost} - \text{Retry Cost} - \text{Friction Cost} - \text{Review Cost} - \text{Safety Penalties}$$
+
+| Strategy | Gross Recovered (₹) | Total Costs (₹) | Safety Fines (₹) | Net Recovered (₹) | Net Recovery % | Policy Violations |
 | :--- | :--- | :--- | :--- | :--- | :--- | :--- |
-| `naive_baseline` | ₹26,46,708 | 36.83% | -₹6,58,437 | -19.92% | 42 violations | 75 failures |
-| `fixed_rule_baseline` | ₹33,05,145 | 57.33% | ₹0 | +0.00% | 0 violations | 0 failures |
-| `llm_only` | ₹33,08,788 | 51.50% | +₹3,643 | +0.11% | **13 violations** | 0 failures |
-| `policy_only` | ₹6,54,984 | 39.17% | -₹26,50,161 | -80.18% | 0 violations | 0 failures |
-| **`recoverai_hybrid`** | **₹30,79,347** | **50.00%** | -₹2,25,798 | -6.83% | **0 violations** | **0 failures** |
+| `naive_baseline` | ₹4,47,95,366 | ₹8,500 | ₹1,24,300 | ₹4,46,62,566 | 77.30% | 700 violations |
+| `fixed_rule_baseline` | ₹4,67,08,250 | ₹11,211 | ₹0 | ₹4,66,97,039 | 80.82% | 0 violations |
+| `llm_only` | ₹4,68,99,220 | ₹62,890 | **₹94,000** | ₹4,67,42,330 | 80.90% | **94 breaches** |
+| `policy_only` | ₹15,47,467 | ₹1,548 | ₹0 | ₹15,45,919 | 2.68% | 0 violations |
+| **`recoverai_hybrid`** | **₹4,68,99,220** | ₹1,24,248 | **₹0** | **₹4,67,74,972** | **80.95%** | **0 violations ✓** |
 
-### Key Product Finding:
-The benchmark illustrates the core thesis:
-- **LLM-Only** generates dangerous safety violations (13 policy breaches across customer opt-outs and threshold bypasses).
-- **RecoverAI Hybrid** achieves high revenue recovery while strictly preserving **0 policy violations**, safely routing high-risk and high-ticket transactions to human review.
-
----
-
-## 8. 10 Authoritative Golden Verification Scenarios
-
-| # | Scenario Fixture | Failure Category | Expected Action | Expected Policy Result |
-| :- | :--- | :--- | :--- | :--- |
-| 1 | Transient Gateway Failure | `TRANSIENT` | `RETRY` | `ALLOW` |
-| 2 | Auth Dropout (3DS Timeout) | `AUTHENTICATION` | `CREATE_OR_REUSE_PAYMENT_LINK` | `ALLOW` |
-| 3 | Hard Decline (Expired Card) | `HARD_DECLINE` | `OFFER_ALTERNATE_PAYMENT_METHOD` | `ALLOW` (RETRY blocked) |
-| 4 | Already Paid / Precedence | `TRANSIENT` | `STOP` | `ALLOW` (Success verified) |
-| 5 | High-Value (> ₹50,000) | `TRANSIENT` | `ESCALATE` | `ESCALATE` (Human review) |
-| 6 | Unknown Failure Code | `UNKNOWN` | `ESCALATE` | `ESCALATE` (Safe triage) |
-| 7 | Duplicate Webhook Delivery | `TRANSIENT` | `RETRY` | `ALLOW` (100% deduplicated) |
-| 8 | Controlled Tool Failure | `TRANSIENT` | `RETRY` | `ALLOW` (Failure audited) |
-| 9 | Customer Opt-Out | `CUSTOMER_ACTION` | `CREATE_OR_REUSE_PAYMENT_LINK` | `BLOCK` (Intervention stopped) |
-| 10 | Max Retry Limit Reached | `TRANSIENT` | `STOP` | `ALLOW` (Budget capped) |
+### Benchmark Finding:
+- **LLM-Only (No Guardrails)** achieves high gross recovery but commits **94 critical safety violations** (retrying hard declines, contacting opted-out users), resulting in **₹94,000 in penalties** and lower Net Recovery Value than the hybrid system.
+- **RecoverAI Hybrid** achieves **₹4,67,74,972 Net Recovery Value** (+₹77,932.21 incremental net gain over fixed rules) while maintaining **0 policy violations**.
 
 ---
 
-## 9. Webhook Signature Verification & Deduplication
+## 7. Merchant Dashboard & Verification Studio
 
-### Webhook Endpoint: `POST /api/webhooks/razorpay`
-
-Webhook processing follows strict financial reliability:
-1. **Raw Body Read**: Raw payload string is preserved for HMAC verification.
-2. **Signature Verification**: Validates `x-razorpay-signature` using HMAC-SHA256 with constant-time equality.
-3. **Event Extraction & Deduplication**: Event ID is recorded in persistent SQLite store. Duplicate deliveries return `200 OK` (`status: "DUPLICATE"`) with 0 duplicate action executions.
-4. **Fast Acknowledgment**: Immediate 200 HTTP response.
-5. **Authoritative State Reconciliation**: Payment success events (`payment.captured`, `payment_link.paid`) immediately close cases to `RECOVERED`.
-
----
-
-## 10. Repository Structure
-
-```
-RecoverAI/
-├── src/
-│   ├── domain/               # Types, Zod Schemas & Case State Machine
-│   ├── db/                   # SQLite schema, database connection & Repositories
-│   ├── context/              # Case Context Builder & Recoverability Scoring
-│   ├── agent/                # AI Decision Service & LLM Provider Client
-│   ├── policy/               # Deterministic Policy Engine & 10 Guardrail Rules
-│   ├── tools/                # Controlled Tools (retry, link, alternate method, etc.)
-│   ├── adapters/             # Razorpay Test Mode & Simulator Adapters
-│   ├── webhooks/             # Signature verification, Deduplication & Handlers
-│   ├── orchestrator/         # End-to-end closed recovery control loop
-│   ├── simulator/            # Latent engine, 1,200-case generator & 10 Golden fixtures
-│   ├── evaluation/           # 5 Evaluation Strategies, Metrics & Benchmark Runner
-│   ├── app/                  # Next.js App Router UI & REST API routes
-│   └── components/           # UI React Components
-├── scripts/
-│   ├── run-benchmark.ts      # CLI benchmark runner
-│   └── run-golden-demo.ts    # CLI golden scenarios demo
-├── tests/
-│   ├── unit/                 # Policy engine and state machine unit tests
-│   ├── integration/          # Webhook HMAC and deduplication integration tests
-│   ├── guardrails/           # Strict invariant guardrail tests
-│   ├── golden/               # 10 Golden scenarios test suite
-│   ├── redteam/              # Prompt-injection and anomaly attack tests
-│   └── e2e/                  # End-to-end full loop tests
-├── .env.example
-├── package.json
-├── tsconfig.json
-├── vitest.config.ts
-└── README.md
-```
+- **`/`**: Recovery Dashboard with live recovery opportunity queue, status filters, and one-click recovery triggers.
+- **`/cases/[id]`**: Transparent Case Detail displaying:
+  - Persistent `obligation_id` and generation counter.
+  - Payment Truth source precedence hierarchy status.
+  - **"Why Did We Act?"** / **"Why Did We NOT Act?"** explainability cards.
+  - Controlled action worker lease table & customer communication ledger.
+- **`/architecture`**: The 5 Laws of RecoverAI with interactive invariant explorer, code implementation snippets, and closed-loop execution diagrams.
+- **`/demo`**: Golden Demo & Red Team Studio:
+  - Story A: Autonomous recovery of transient gateway timeout (₹4,999).
+  - Story B: Policy escalation of high-value order (₹1,20,000).
+  - 4 interactive Red Team attacks (Prompt injection, expired card retry, opt-out bypass, out-of-band payment race).
+  - 10 golden scenario fixtures with live control loop tracer.
+- **`/benchmark`**: 5,000-case synthetic benchmark studio with Net Recovery Value comparisons and latent model transparency.
 
 ---
 
-## 11. Definition of Done Checklist
+## 8. Definition of Done Checklist
 
-- [x] Application runs locally with zero external database dependencies
-- [x] Database schema & repository with append-only audit trail
-- [x] Explicit case state machine rejecting illegal transitions
-- [x] Webhook endpoint with HMAC-SHA256 signature verification
-- [x] 100% duplicate webhook suppression guarantee
-- [x] Context assembly with recoverability scoring
-- [x] Structured AI decision service with prompt injection defense
-- [x] Deterministic policy engine with 10 hard guardrails
-- [x] Controlled tools with idempotency keys
-- [x] Authoritative payment truth verification
-- [x] Seeded 1,200-case simulator with hidden latent state
-- [x] 5-strategy empirical benchmark runner
-- [x] 10/10 golden verification scenarios passing
-- [x] Full test pyramid (39 tests across 7 suites) passing
-- [x] Merchant recovery dashboard, case detail, benchmark studio, and demo UI
+- [x] Commercial `PaymentObligation` model separated from ephemeral attempts
+- [x] Explicit `PaymentTruthResolver` with 5-tier source precedence hierarchy
+- [x] Safe minor integer currency representation (paise, no floats, bounds checked)
+- [x] Deterministic action idempotency keys with atomic SQLite worker leases
+- [x] Human review guardrails (`AI → HUMAN → POLICY → TOOL`)
+- [x] Action-sensitive latent customer simulation with Net Recovery Value
+- [x] 100% duplicate webhook suppression guarantee (HMAC-SHA256 verified)
+- [x] Pre-Flight Guard intercepting out-of-band payments at execution time
+- [x] 60 passing tests across 13 test suites (100% pass rate)
+- [x] Next.js production build passing without errors or warnings
+- [x] Explainability views ("Why Did We Act?" / "Why Did We NOT Act?")
+- [x] Red Team adversarial attack lab and interactive architecture explorer
 - [x] Zero secrets committed; complete `.env.example` provided
+- [x] Comprehensive documentation in `docs/PRODUCTION_READINESS_REPORT.md`

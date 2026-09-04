@@ -48,9 +48,9 @@ export class PolicyOnlyStrategy implements EvaluationStrategy {
     if (category === 'TRANSIENT') {
       ruleAction = 'RETRY';
     } else if (category === 'AUTHENTICATION' || category === 'CUSTOMER_ACTION') {
-      ruleAction = 'SEND_RECOVERY_LINK';
+      ruleAction = 'CREATE_OR_REUSE_PAYMENT_LINK';
     } else if (category === 'HARD_DECLINE') {
-      ruleAction = 'SEND_RECOVERY_LINK';
+      ruleAction = 'OFFER_ALTERNATE_PAYMENT_METHOD';
     }
 
     const pseudoDecision: Decision = {
@@ -75,12 +75,20 @@ export class PolicyOnlyStrategy implements EvaluationStrategy {
     };
 
     const policyCheck = this.policyEngine.evaluate(mockRecoveryCase, pseudoDecision);
-    const actionToExecute: ApprovedAction = policyCheck.allowed ? ruleAction : 'STOP';
+    let actionToExecute: ApprovedAction = 'STOP';
+    if (policyCheck.allowed) {
+      actionToExecute = ruleAction;
+    } else if (policyCheck.policy_result === 'ESCALATE') {
+      actionToExecute = 'ESCALATE';
+    } else {
+      actionToExecute = 'STOP';
+    }
 
     const outcome = LatentEngine.evaluateActionOutcome(
       actionToExecute,
       c._hidden_latent,
-      c.amount
+      c.amount,
+      { consent_status: c.consent_status }
     );
     const end = performance.now();
 
@@ -92,10 +100,12 @@ export class PolicyOnlyStrategy implements EvaluationStrategy {
       policyResult: policyCheck.policy_result,
       recovered: outcome.recovered,
       recoveredAmount: outcome.recoveredAmount,
+      netRecoveryValue: outcome.netRecoveryValue,
       isPolicyViolation: false,
       isUnnecessaryIntervention: outcome.isUnnecessaryIntervention,
       isHardDeclineRetry: outcome.isHardDeclineRetry,
       executionTimeMs: Number((end - start).toFixed(2)),
+      costs: outcome.costs,
       diagnosis: pseudoDecision.diagnosis,
       rationale: pseudoDecision.rationale,
     };

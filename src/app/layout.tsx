@@ -57,6 +57,13 @@ export default function RootLayout({
                   5k Synthetic Benchmark
                 </Link>
                 <Link
+                  href="/architecture"
+                  className="px-3 py-2 rounded-lg hover:bg-slate-800 text-slate-300 hover:text-white transition-colors flex items-center gap-1.5"
+                >
+                  <ShieldCheck className="w-3.5 h-3.5 text-cyan-400" />
+                  Control Architecture
+                </Link>
+                <Link
                   href="/settings"
                   className="px-3 py-2 rounded-lg hover:bg-slate-800 text-slate-300 hover:text-white transition-colors flex items-center gap-1.5"
                 >

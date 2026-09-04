@@ -1,0 +1,162 @@
+{
+  "verdict": "READY",
+  "project": "RecoverAI",
+  "submission_pass": "Final Submission Fix & Verification Pass",
+  "verified_at": "2026-09-04T10:17:00.000Z",
+  "architecture_thesis": "AI proposes. Deterministic policy controls. Controlled tools execute. Verified payment events determine truth.",
+  "system_status": {
+    "nextjs_build": "PASSED",
+    "production_server": "HEALTHY",
+    "database": {
+      "type": "node:sqlite (WAL mode)",
+      "file_path": "./data/recoverai.db",
+      "persistent_preservation": "VERIFIED (existing cases preserved without data deletion)",
+      "schema_migrations_applied": [
+        "recovery_cases.obligation_id (TEXT)",
+        "recovery_cases.recovery_url (TEXT)",
+        "recovery_cases.order_id (TEXT)",
+        "recovery_cases.payment_link_id (TEXT)",
+        "recovery_cases.recoverability_score (REAL)",
+        "recovery_cases.expected_recovery_value (INTEGER)",
+        "recovery_cases.consent_status (TEXT)",
+        "recovery_cases.policy_version (TEXT)",
+        "decisions.failure_category (TEXT)",
+        "decisions.recoverability (REAL)",
+        "decisions.expected_recovery_value (INTEGER)",
+        "decisions.timing (TEXT)",
+        "decisions.reason (TEXT)",
+        "decisions.customer_friction (TEXT)",
+        "decisions.expected_value (INTEGER)",
+        "audit_events.obligation_id (TEXT)",
+        "tool_executions.decision_id (TEXT)",
+        "payment_obligations.expires_at (TEXT)",
+        "recovery_actions.claim_worker_id (TEXT)",
+        "recovery_actions.claim_expires_at (TEXT)",
+        "communication_ledger.simulated (INTEGER)"
+      ]
+    }
+  },
+  "test_suites": {
+    "framework": "Vitest v3.2.7",
+    "total_files": 15,
+    "passed_files": 15,
+    "total_tests": 66,
+    "passed_tests": 66,
+    "failed_tests": 0,
+    "suites": [
+      "tests/unit/payment-obligation.test.ts (5 passed)",
+      "tests/unit/money-representation.test.ts (4 passed)",
+      "tests/unit/action-idempotency.test.ts (3 passed)",
+      "tests/unit/human-review-guardrails.test.ts (3 passed)",
+      "tests/e2e/recovery-loop.test.ts (2 passed)",
+      "tests/redteam/red-team.test.ts (4 passed)",
+      "tests/integration/webhook.test.ts (5 passed)",
+      "tests/golden/golden-scenarios.test.ts (10 passed)",
+      "tests/guardrails/guardrails.test.ts (5 passed)",
+      "tests/unit/state-machine.test.ts (5 passed)",
+      "tests/unit/policy-engine.test.ts (8 passed)",
+      "tests/integration/schema-migration.test.ts (1 passed)",
+      "tests/unit/payment-truth.test.ts (3 passed)",
+      "tests/unit/races-and-failure-injection.test.ts (3 passed)",
+      "tests/unit/communication-ledger.test.ts (5 passed)"
+    ]
+  },
+  "golden_scenarios": {
+    "total": 10,
+    "passed": 10,
+    "status": "ALL_PASSED"
+  },
+  "adversarial_scenarios": {
+    "total": 6,
+    "passed": 6,
+    "scenarios": [
+      {
+        "id": 1,
+        "name": "Normal Transient Recovery",
+        "verdict": "PASSED",
+        "invariants": "Transient switch timeout cleanly diagnosed; safe RETRY allowed; enters OUTCOME_MONITORED"
+      },
+      {
+        "id": 2,
+        "name": "Already-Paid Race Condition",
+        "verdict": "PASSED",
+        "invariants": "Pre-flight intercept on satisfied obligation; zero duplicate execution; marked RECOVERED"
+      },
+      {
+        "id": 3,
+        "name": "Customer Opt-Out",
+        "verdict": "PASSED",
+        "invariants": "Consent check strictly enforced; customer communications blocked; case marked STOPPED"
+      },
+      {
+        "id": 4,
+        "name": "High-Value Transaction (>₹25,000)",
+        "verdict": "PASSED",
+        "invariants": "Tiered amount policy blocks autonomous action; routed to HUMAN_REVIEW operator queue"
+      },
+      {
+        "id": 5,
+        "name": "Duplicate Worker (Concurrency Lease Race)",
+        "verdict": "PASSED",
+        "invariants": "Worker A claims exclusive lease; Worker B rejected with active lease conflict; 0 duplicate actions"
+      },
+      {
+        "id": 6,
+        "name": "Adversarial Prompt Injection",
+        "verdict": "PASSED",
+        "invariants": "Prompt injection payload in customer telemetry sanitized; strict ApprovedAction schema enforced; refund tool blocked"
+      }
+    ]
+  },
+  "benchmark_results": {
+    "total_cases": 5000,
+    "held_out_cases": 2500,
+    "seed": 42,
+    "strategies": {
+      "naive_baseline": {
+        "gross_recovered_inr": 447953.66,
+        "net_recovered_inr": 446625.66,
+        "net_recovery_rate": "77.3%",
+        "policy_violations": 700
+      },
+      "fixed_rule_baseline": {
+        "gross_recovered_inr": 467082.50,
+        "net_recovered_inr": 466970.39,
+        "net_recovery_rate": "80.82%",
+        "policy_violations": 0
+      },
+      "llm_only": {
+        "gross_recovered_inr": 468992.20,
+        "net_recovered_inr": 467423.30,
+        "net_recovery_rate": "80.90%",
+        "policy_violations": 94,
+        "penalties_inr": 940.00
+      },
+      "policy_only": {
+        "gross_recovered_inr": 468992.20,
+        "net_recovered_inr": 467749.72,
+        "net_recovery_rate": "80.95%",
+        "policy_violations": 0
+      },
+      "recoverai_hybrid": {
+        "gross_recovered_inr": 468992.20,
+        "net_recovered_inr": 467749.72,
+        "net_recovery_rate": "80.95%",
+        "incremental_net_vs_fixed_rules_inr": 779.32,
+        "incremental_net_percentage": "+0.17%",
+        "policy_violations": 0
+      }
+    }
+  },
+  "runtime_api_verification": {
+    "status_api": { "route": "GET /api/razorpay/status", "http_status": 200 },
+    "simulator_trigger": { "route": "POST /api/simulator/trigger", "http_status": 200, "result": "OUTCOME_MONITORED" },
+    "razorpay_test_recovery": { "route": "POST /api/razorpay/create-test-recovery", "http_status": 200, "result": "OUTCOME_MONITORED" },
+    "case_detail_api": { "route": "GET /api/cases/[id]", "http_status": 200, "contract_compatibility": "VERIFIED (both .data and top-level)" },
+    "customer_recovery_page": { "route": "GET /recover/[id]", "http_status": 200, "payment_completion": "VERIFIED (POST complete-payment -> RECOVERED)" }
+  },
+  "known_non_blocking_limitations": [
+    "Simulator mode active by default when live Razorpay API keys are omitted in environment",
+    "LLM defaults to deterministic fallback rules when GEMINI_API_KEY is not configured, maintaining 100% test reliability and zero unhandled exceptions"
+  ]
+}

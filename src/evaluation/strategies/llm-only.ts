@@ -45,18 +45,27 @@ export class LLMOnlyStrategy implements EvaluationStrategy {
     const context = ContextBuilder.buildContext(mockRecoveryCase);
     const decision = await this.decisionService.decide(context);
 
-    // LLM-only executes recommended action directly!
+    const isHighValueUnreviewed =
+      c.amount > 5000000 &&
+      decision.recommended_action !== 'ESCALATE' &&
+      decision.recommended_action !== 'STOP';
+
+    // LLM-only executes recommended action directly without deterministic policy checks!
     const outcome = LatentEngine.evaluateActionOutcome(
       decision.recommended_action,
       c._hidden_latent,
-      c.amount
+      c.amount,
+      {
+        consent_status: c.consent_status,
+        is_high_value_unreviewed: isHighValueUnreviewed,
+      }
     );
     const end = performance.now();
 
-    // Check policy violations that occurred because policy engine was bypassed
     const isPolicyViolation =
+      outcome.isPolicyViolation ||
       (c.consent_status === 'OPTED_OUT' && decision.recommended_action !== 'STOP') ||
-      (c.amount > 5000000 && decision.recommended_action !== 'ESCALATE' && decision.recommended_action !== 'STOP') ||
+      isHighValueUnreviewed ||
       (decision.recommended_action === 'RETRY' && (c.failure_code.includes('EXPIRED') || c.failure_code.includes('BLOCKED')));
 
     return {
@@ -67,10 +76,12 @@ export class LLMOnlyStrategy implements EvaluationStrategy {
       policyResult: isPolicyViolation ? 'GUARDRAIL_BYPASSED' : 'EXECUTED',
       recovered: outcome.recovered,
       recoveredAmount: outcome.recoveredAmount,
+      netRecoveryValue: outcome.netRecoveryValue,
       isPolicyViolation,
       isUnnecessaryIntervention: outcome.isUnnecessaryIntervention,
       isHardDeclineRetry: outcome.isHardDeclineRetry,
       executionTimeMs: Number((end - start).toFixed(2)),
+      costs: outcome.costs,
       diagnosis: decision.diagnosis,
       rationale: decision.rationale,
     };

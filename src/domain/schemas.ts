@@ -39,6 +39,79 @@ export const CaseStatusSchema = z.enum([
   'POLICY_CHECKED',
 ]);
 
+export const AmountMinorSchema = z
+  .number()
+  .int('Amount in minor units must be an integer')
+  .nonnegative('Amount must be non-negative')
+  .max(Number.MAX_SAFE_INTEGER, 'Amount exceeds safe integer range');
+
+export const ObligationStatusSchema = z.enum([
+  'OPEN',
+  'PARTIALLY_SATISFIED',
+  'SATISFIED',
+  'EXPIRED',
+  'CANCELLED',
+  'UNKNOWN',
+]);
+
+export const PaymentObligationSchema = z.object({
+  id: z.string(),
+  merchant_id: z.string(),
+  order_id: z.string(),
+  amount_minor: AmountMinorSchema,
+  currency: z.string().min(3).max(3),
+  status: ObligationStatusSchema,
+  satisfied_at: z.string().nullable().optional(),
+  satisfied_by_payment_id: z.string().nullable().optional(),
+  created_at: z.string(),
+  updated_at: z.string(),
+  expires_at: z.string().nullable().optional(),
+});
+
+export const ActionLifecycleStatusSchema = z.enum([
+  'PROPOSED',
+  'POLICY_ALLOWED',
+  'CLAIMED',
+  'EXECUTING',
+  'EXECUTED',
+  'OUTCOME_PENDING',
+  'SUCCEEDED',
+  'FAILED',
+  'CANCELLED',
+]);
+
+export const RecoveryActionSchema = z.object({
+  id: z.string(),
+  case_id: z.string(),
+  obligation_id: z.string(),
+  action_type: ApprovedActionSchema,
+  generation: z.number().int().nonnegative(),
+  idempotency_key: z.string(),
+  status: ActionLifecycleStatusSchema,
+  valid_until: z.string(),
+  claim_worker_id: z.string().nullable().optional(),
+  claim_expires_at: z.string().nullable().optional(),
+  arguments: z.record(z.any()),
+  result: z.record(z.any()),
+  created_at: z.string(),
+  updated_at: z.string(),
+});
+
+export const CommunicationAttemptSchema = z.object({
+  id: z.string(),
+  obligation_id: z.string(),
+  case_id: z.string(),
+  customer_id: z.string().optional(),
+  channel: z.enum(['WHATSAPP', 'SMS', 'EMAIL', 'PAYMENT_LINK_PAGE']),
+  template: z.string(),
+  status: z.enum(['QUEUED', 'SENT', 'DELIVERED', 'FAILED', 'SUPPRESSED']),
+  sent_at: z.string(),
+  delivered_at: z.string().nullable().optional(),
+  failed_at: z.string().nullable().optional(),
+  error_reason: z.string().nullable().optional(),
+  simulated: z.boolean().default(true),
+});
+
 export const ConsentStatusSchema = z.enum(['CONSENTED', 'OPTED_OUT', 'UNKNOWN']);
 
 export const PaymentMethodSchema = z.enum(['card', 'upi', 'netbanking', 'wallet', 'emi', 'unknown']);

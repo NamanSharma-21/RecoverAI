@@ -20,6 +20,9 @@ interface CaseDetail {
 
 export default function ConsumerRecoveryPage({ params }: { params: { id: string } }) {
   const [caseData, setCaseData] = useState<CaseDetail | null>(null);
+  const [obligationData, setObligationData] = useState<any | null>(null);
+  const [latestDecision, setLatestDecision] = useState<any | null>(null);
+  const [recoveryActions, setRecoveryActions] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [paying, setPaying] = useState(false);
   const [paidSuccess, setPaidSuccess] = useState(false);
@@ -34,8 +37,19 @@ export default function ConsumerRecoveryPage({ params }: { params: { id: string 
       const res = await fetch(`/api/cases/${params.id}`);
       const data = await res.json();
       if (data.success) {
-        setCaseData(data.data.case);
-        if (data.data.case.status === 'RECOVERED') {
+        const c = data?.data?.case || data?.case;
+        const obl = data?.data?.obligation || data?.obligation;
+        const decs = data?.data?.decisions || data?.decisions || [];
+        const actions = data?.data?.recoveryActions || data?.recoveryActions || [];
+
+        setCaseData(c);
+        setObligationData(obl);
+        if (decs && decs.length > 0) {
+          setLatestDecision(decs[decs.length - 1]);
+        }
+        setRecoveryActions(actions || []);
+
+        if (c?.status === 'RECOVERED' || obl?.status === 'SATISFIED') {
           setPaidSuccess(true);
         }
       }
@@ -162,7 +176,7 @@ export default function ConsumerRecoveryPage({ params }: { params: { id: string 
             </div>
 
             {/* Order Summary Box */}
-            <div className="bg-slate-950 border border-slate-800 rounded-xl p-4 mb-6">
+            <div className="bg-slate-950 border border-slate-800 rounded-xl p-4 mb-4">
               <div className="flex justify-between items-center text-sm">
                 <span className="text-slate-400">Amount Due</span>
                 <span className="text-xl font-bold text-white">{formattedAmount}</span>
@@ -171,7 +185,34 @@ export default function ConsumerRecoveryPage({ params }: { params: { id: string 
                 <span>Order ID</span>
                 <span className="font-mono text-slate-300">{caseData.order_id || caseData.id}</span>
               </div>
+              {obligationData && (
+                <div className="mt-1 flex justify-between text-xs text-slate-400">
+                  <span>Obligation Status</span>
+                  <span className="font-mono text-blue-400">{obligationData.status}</span>
+                </div>
+              )}
             </div>
+
+            {/* AI Recovery Action Info */}
+            {latestDecision && (
+              <div className="bg-blue-950/20 border border-blue-800/40 rounded-xl p-3.5 mb-6 text-xs">
+                <div className="flex items-center space-x-2 text-blue-300 font-semibold mb-1">
+                  <span className="w-2 h-2 rounded-full bg-blue-400"></span>
+                  <span>RecoverAI Smart Session Active</span>
+                </div>
+                <p className="text-slate-400">
+                  {latestDecision.diagnosis}
+                </p>
+                {latestDecision.recommended_action && (
+                  <div className="mt-2 text-[11px] text-slate-300">
+                    <span className="text-slate-400">Recovery Path: </span>
+                    <span className="font-mono text-emerald-400 font-medium">
+                      {latestDecision.recommended_action.replace(/_/g, ' ')}
+                    </span>
+                  </div>
+                )}
+              </div>
+            )}
 
             {/* Payment Method Selector */}
             <div className="space-y-2 mb-6">

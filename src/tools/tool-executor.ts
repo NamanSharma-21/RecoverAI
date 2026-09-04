@@ -36,10 +36,23 @@ export class ToolExecutor {
     return this.paymentProvider;
   }
 
+  generateDeterministicIdempotencyKey(
+    obligationKey: string,
+    action: ApprovedAction,
+    generation: number
+  ): string {
+    return `idemp_${obligationKey}_${action}_gen${generation}`;
+  }
+
   async execute(
     action: ApprovedAction,
     c: RecoveryCase,
-    policyCheck: PolicyCheck
+    policyCheck: PolicyCheck,
+    options?: {
+      workerId?: string;
+      validUntil?: string;
+      customIdempotencyKey?: string;
+    }
   ): Promise<ToolResult> {
     // 1. Invariant: Policy must allow execution
     if (!policyCheck.allowed && policyCheck.policy_result !== 'ALLOW') {
@@ -48,9 +61,32 @@ export class ToolExecutor {
       );
     }
 
-    // 2. Invariant: Idempotency Key check
-    const idempotencyKey = `idemp_${c.id}_${action}_${c.attempt_count}_${Date.now()}`;
-    if (this.repository && typeof this.repository.getToolExecutionByIdempotencyKey === 'function') {
+    // 2. Invariant: Deterministic Idempotency Key
+    // Bound to obligation/order identity and action generation without random timestamps!
+    const obligationKey = c.obligation_id || c.order_id || c.payment_id || c.id;
+    const idempotencyKey =
+      options?.customIdempotencyKey ||
+      this.generateDeterministicIdempotencyKey(obligationKey, action, c.attempt_count);
+
+    // Check existing execution records for replay
+    if (this.repository && typeof this.repository.getRecoveryActionByIdempotencyKey === 'function') {
+      const existingAction = this.repository.getRecoveryActionByIdempotencyKey(idempotencyKey);
+      if (existingAction) {
+        if (existingAction.status === 'SUCCEEDED' || existingAction.status === 'EXECUTED') {
+          return {
+            success: true,
+            action,
+            data: existingAction.result,
+            message: 'Idempotent replay: Action was already executed.',
+          };
+        }
+        if (existingAction.status === 'CLAIMED' || existingAction.status === 'EXECUTING') {
+          throw new Error(
+            `Concurrent Execution Conflict: Action '${idempotencyKey}' is already claimed by worker ${existingAction.claim_worker_id}. Duplicate execution rejected.`
+          );
+        }
+      }
+    } else if (this.repository && typeof this.repository.getToolExecutionByIdempotencyKey === 'function') {
       const existing = this.repository.getToolExecutionByIdempotencyKey(idempotencyKey);
       if (existing) {
         return {
@@ -62,7 +98,40 @@ export class ToolExecutor {
       }
     }
 
-    // 3. Record pending tool execution
+    // 3. Register Action Lifecycle: PROPOSED -> POLICY_ALLOWED -> CLAIMED -> EXECUTING
+    const workerId = options?.workerId || `worker_${process.pid || 'main'}_${Math.random().toString(36).slice(2, 6)}`;
+    const actionId = `act_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
+    const validUntil = options?.validUntil || new Date(Date.now() + 5 * 60 * 1000).toISOString(); // 5-minute decision validity
+    const nowIso = new Date().toISOString();
+
+    if (this.repository && typeof this.repository.createRecoveryAction === 'function') {
+      this.repository.createRecoveryAction({
+        id: actionId,
+        case_id: c.id,
+        obligation_id: c.obligation_id || obligationKey,
+        action_type: action,
+        generation: c.attempt_count,
+        idempotency_key: idempotencyKey,
+        status: 'POLICY_ALLOWED',
+        valid_until: validUntil,
+        claim_worker_id: null,
+        claim_expires_at: null,
+        arguments: { case_id: c.id, payment_id: c.payment_id, amount: c.amount, action },
+        result: {},
+        created_at: nowIso,
+        updated_at: nowIso,
+      });
+
+      // Atomic DB lease claim
+      const claimed = this.repository.claimActionForExecution(actionId, workerId, 30000);
+      if (!claimed) {
+        throw new Error(`Failed to acquire execution lease for action ${actionId}.`);
+      }
+
+      this.repository.updateRecoveryActionStatus(actionId, 'EXECUTING');
+    }
+
+    // Also record legacy tool execution record for audit & backward compatibility
     const executionId = `tool_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
     if (this.repository && typeof this.repository.createToolExecution === 'function') {
       this.repository.createToolExecution({
@@ -74,21 +143,22 @@ export class ToolExecutor {
         arguments: { case_id: c.id, payment_id: c.payment_id, amount: c.amount, action },
         result: {},
         status: 'PENDING',
-        created_at: new Date().toISOString(),
+        created_at: nowIso,
       });
 
       this.repository.createAuditEvent({
         id: `aud_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`,
         case_id: c.id,
+        obligation_id: c.obligation_id || obligationKey,
         event_type: 'TOOL_EXECUTION_ATTEMPTED',
         actor: 'TOOL',
         source: `ToolExecutor.${action}`,
-        metadata: { action, attempt: c.attempt_count, idempotency_key: idempotencyKey },
-        timestamp: new Date().toISOString(),
+        metadata: { action, attempt: c.attempt_count, idempotency_key: idempotencyKey, worker_id: workerId },
+        timestamp: nowIso,
       });
     }
 
-    // 4. Controlled Execution
+    // 4. Controlled Execution with Post-Flight Check
     let result: ToolResult;
     try {
       switch (action) {
@@ -136,6 +206,15 @@ export class ToolExecutor {
           throw new Error(`Unknown action: ${action}`);
       }
 
+      // POST-FLIGHT: Update action lifecycle to EXECUTED / SUCCEEDED
+      if (this.repository && typeof this.repository.updateRecoveryActionStatus === 'function') {
+        this.repository.updateRecoveryActionStatus(
+          actionId,
+          result.success ? 'SUCCEEDED' : 'FAILED',
+          result.data
+        );
+      }
+
       if (this.repository && typeof this.repository.updateToolExecution === 'function') {
         this.repository.updateToolExecution(
           executionId,
@@ -146,6 +225,7 @@ export class ToolExecutor {
         this.repository.createAuditEvent({
           id: `aud_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`,
           case_id: c.id,
+          obligation_id: c.obligation_id || obligationKey,
           event_type: result.success ? 'TOOL_EXECUTION_COMPLETED' : 'TOOL_EXECUTION_FAILED',
           actor: 'TOOL',
           source: `ToolExecutor.${action}`,
@@ -156,11 +236,16 @@ export class ToolExecutor {
 
       return result;
     } catch (err: any) {
+      if (this.repository && typeof this.repository.updateRecoveryActionStatus === 'function') {
+        this.repository.updateRecoveryActionStatus(actionId, 'FAILED', { error: err.message });
+      }
+
       if (this.repository && typeof this.repository.updateToolExecution === 'function') {
         this.repository.updateToolExecution(executionId, 'FAILED', { error: err.message });
         this.repository.createAuditEvent({
           id: `aud_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`,
           case_id: c.id,
+          obligation_id: c.obligation_id || obligationKey,
           event_type: 'TOOL_EXECUTION_FAILED',
           actor: 'TOOL',
           source: `ToolExecutor.${action}`,

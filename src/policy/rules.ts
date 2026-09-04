@@ -20,11 +20,31 @@ export class PolicyRules {
   }
 
   /**
-   * Check 2: Has payment already succeeded?
+   * Check 2: Has payment already succeeded on case or underlying obligation?
    */
-  static checkPaymentNotAlreadySucceeded(c: RecoveryCase): { ok: boolean; reason?: string } {
+  static checkPaymentNotAlreadySucceeded(c: RecoveryCase, obligationStatus?: string): { ok: boolean; reason?: string } {
     if (c.status === 'RECOVERED') {
       return { ok: false, reason: 'Case has already been marked RECOVERED. Action blocked.' };
+    }
+    if (obligationStatus === 'SATISFIED') {
+      return { ok: false, reason: 'Commercial payment obligation is already SATISFIED. Action blocked.' };
+    }
+    return { ok: true };
+  }
+
+  /**
+   * Check 2b: Has the decision proposal expired (staleness prevention)?
+   */
+  static checkDecisionNotStale(d: Decision, maxValidityMinutes: number = 5): { ok: boolean; reason?: string } {
+    if (d.created_at) {
+      const createdAt = new Date(d.created_at).getTime();
+      const elapsedMinutes = (Date.now() - createdAt) / (1000 * 60);
+      if (elapsedMinutes > maxValidityMinutes) {
+        return {
+          ok: false,
+          reason: `Decision created at ${d.created_at} has expired (> ${maxValidityMinutes}m stale). Re-evaluation required.`,
+        };
+      }
     }
     return { ok: true };
   }
@@ -126,7 +146,18 @@ export class PolicyRules {
     d: Decision,
     config: MerchantPolicyConfig
   ): { ok: boolean; reason?: string } {
-    const isProhibitedForRetry = config.prohibited_failure_codes_for_retry.some(
+    const prohibitedCodes =
+      config.prohibited_failure_codes_for_retry || [
+        'BAD_REQUEST_ERROR',
+        'EXPIRED_CARD',
+        'STOLEN_CARD',
+        'FRAUDULENT_TRANSACTION',
+        'CARD_BLOCKED',
+        'ACCOUNT_CLOSED',
+        'TRANSACTION_NOT_ALLOWED',
+        'HARD_DECLINE',
+      ];
+    const isProhibitedForRetry = prohibitedCodes.some(
       (code) => c.failure_code.toUpperCase().includes(code)
     );
 

@@ -12,10 +12,141 @@ import {
   ApprovedAction,
   PolicyResult,
   CustomerFriction,
+  PaymentObligation,
+  ObligationStatus,
+  RecoveryAction,
+  ActionLifecycleStatus,
+  CommunicationAttempt,
 } from '../domain/types';
 
 export class Repository {
   constructor(private db: DatabaseSync) {}
+
+  // ==================== PAYMENT OBLIGATIONS ====================
+
+  getOrCreateObligation(
+    orderId: string,
+    arg2: number | string,
+    arg3?: string | number,
+    arg4?: string
+  ): PaymentObligation {
+    const existing = this.getObligationByOrderId(orderId);
+    if (existing) {
+      return existing;
+    }
+
+    let amountMinor: number;
+    let currency: string = 'INR';
+    let merchantId: string = 'merchant_default';
+
+    if (typeof arg2 === 'string') {
+      merchantId = arg2;
+      amountMinor = typeof arg3 === 'number' ? arg3 : 0;
+      currency = typeof arg4 === 'string' ? arg4 : 'INR';
+    } else {
+      amountMinor = arg2;
+      currency = typeof arg3 === 'string' ? arg3 : 'INR';
+      merchantId = typeof arg4 === 'string' ? arg4 : 'merchant_default';
+    }
+
+    const now = new Date().toISOString();
+    const id = `obl_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
+    const obligation: PaymentObligation = {
+      id,
+      merchant_id: merchantId,
+      order_id: orderId,
+      amount_minor: amountMinor,
+      currency,
+      status: 'OPEN',
+      satisfied_at: null,
+      satisfied_by_payment_id: null,
+      created_at: now,
+      updated_at: now,
+    };
+
+    this.db
+      .prepare(
+        `INSERT INTO payment_obligations (
+          id, merchant_id, order_id, amount_minor, currency, status,
+          satisfied_at, satisfied_by_payment_id, created_at, updated_at
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
+      )
+      .run(
+        obligation.id,
+        obligation.merchant_id,
+        obligation.order_id,
+        obligation.amount_minor,
+        obligation.currency,
+        obligation.status,
+        obligation.satisfied_at || null,
+        obligation.satisfied_by_payment_id || null,
+        obligation.created_at,
+        obligation.updated_at
+      );
+
+    return obligation;
+  }
+
+  getObligationById(id: string): PaymentObligation | null {
+    const row = this.db
+      .prepare('SELECT * FROM payment_obligations WHERE id = ?')
+      .get(id) as any;
+    if (!row) return null;
+    return this.mapObligationRow(row);
+  }
+
+  getObligationByOrderId(orderId: string): PaymentObligation | null {
+    const row = this.db
+      .prepare('SELECT * FROM payment_obligations WHERE order_id = ?')
+      .get(orderId) as any;
+    if (!row) return null;
+    return this.mapObligationRow(row);
+  }
+
+  updateObligationStatus(
+    id: string,
+    status: ObligationStatus,
+    satisfiedByPaymentId?: string | null
+  ): PaymentObligation | null {
+    const now = new Date().toISOString();
+    const satisfiedAt = status === 'SATISFIED' ? now : null;
+
+    this.db
+      .prepare(
+        `UPDATE payment_obligations SET
+          status = ?,
+          satisfied_at = CASE WHEN ? = 'SATISFIED' AND satisfied_at IS NULL THEN ? ELSE satisfied_at END,
+          satisfied_by_payment_id = COALESCE(?, satisfied_by_payment_id),
+          updated_at = ?
+        WHERE id = ?`
+      )
+      .run(status, status, satisfiedAt, satisfiedByPaymentId || null, now, id);
+
+    return this.getObligationById(id);
+  }
+
+  listObligations(): PaymentObligation[] {
+    const rows = this.db
+      .prepare('SELECT * FROM payment_obligations ORDER BY created_at DESC')
+      .all() as any[];
+    return rows.map((r) => this.mapObligationRow(r));
+  }
+
+  private mapObligationRow(row: any): PaymentObligation {
+    return {
+      id: row.id,
+      merchant_id: row.merchant_id,
+      order_id: row.order_id,
+      amount_minor: row.amount_minor,
+      currency: row.currency,
+      status: row.status as ObligationStatus,
+      satisfied_at: row.satisfied_at,
+      satisfied_by_payment_id: row.satisfied_by_payment_id,
+      created_at: row.created_at,
+      updated_at: row.updated_at,
+      expires_at: row.expires_at,
+    };
+  }
 
   // ==================== WEBHOOK EVENTS ====================
 
@@ -65,39 +196,49 @@ export class Repository {
 
   // ==================== RECOVERY CASES ====================
 
-  createCase(c: RecoveryCase): void {
+  createCase(c: RecoveryCase): RecoveryCase {
+    const now = new Date().toISOString();
+    const caseRecord: RecoveryCase = {
+      ...c,
+      created_at: c.created_at || now,
+      updated_at: c.updated_at || now,
+    };
+
     this.db
       .prepare(
         `INSERT INTO recovery_cases (
-          id, merchant_id, event_id, payment_id, order_id, payment_link_id, recovery_url,
+          id, merchant_id, obligation_id, event_id, payment_id, order_id, payment_link_id, recovery_url,
           amount, currency, failure_code, failure_description, payment_method,
           customer_context, attempt_count, status, recoverability_score,
           expected_recovery_value, consent_status, policy_version, created_at, updated_at
-        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
       )
       .run(
-        c.id,
-        c.merchant_id,
-        c.event_id,
-        c.payment_id,
-        c.order_id || null,
-        c.payment_link_id || null,
-        c.recovery_url || null,
-        c.amount,
-        c.currency,
-        c.failure_code,
-        c.failure_description,
-        c.payment_method,
-        JSON.stringify(c.customer_context),
-        c.attempt_count,
-        c.status,
-        c.recoverability_score,
-        c.expected_recovery_value,
-        c.consent_status,
-        c.policy_version,
-        c.created_at,
-        c.updated_at
+        caseRecord.id,
+        caseRecord.merchant_id,
+        caseRecord.obligation_id || null,
+        caseRecord.event_id,
+        caseRecord.payment_id,
+        caseRecord.order_id || null,
+        caseRecord.payment_link_id || null,
+        caseRecord.recovery_url || null,
+        caseRecord.amount,
+        caseRecord.currency,
+        caseRecord.failure_code,
+        caseRecord.failure_description,
+        caseRecord.payment_method,
+        JSON.stringify(caseRecord.customer_context || {}),
+        caseRecord.attempt_count,
+        caseRecord.status,
+        caseRecord.recoverability_score,
+        caseRecord.expected_recovery_value,
+        caseRecord.consent_status,
+        caseRecord.policy_version,
+        caseRecord.created_at,
+        caseRecord.updated_at
       );
+
+    return caseRecord;
   }
 
   updateCase(c: Partial<RecoveryCase> & { id: string }): void {
@@ -116,6 +257,7 @@ export class Repository {
       .prepare(
         `UPDATE recovery_cases SET
           merchant_id = ?,
+          obligation_id = ?,
           event_id = ?,
           payment_id = ?,
           order_id = ?,
@@ -138,6 +280,7 @@ export class Repository {
       )
       .run(
         updated.merchant_id,
+        updated.obligation_id || null,
         updated.event_id,
         updated.payment_id,
         updated.order_id || null,
@@ -287,6 +430,7 @@ export class Repository {
     return {
       id: row.id,
       merchant_id: row.merchant_id,
+      obligation_id: row.obligation_id || null,
       event_id: row.event_id,
       payment_id: row.payment_id,
       order_id: row.order_id,
@@ -515,23 +659,254 @@ export class Repository {
     }));
   }
 
+  // ==================== RECOVERY ACTIONS ====================
+
+  createRecoveryAction(a: Partial<RecoveryAction> & {
+    obligation_id: string;
+    case_id: string;
+    action_type: ApprovedAction;
+    idempotency_key: string;
+  }): RecoveryAction {
+    const now = new Date().toISOString();
+    const action: RecoveryAction = {
+      id: a.id || `act_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`,
+      case_id: a.case_id,
+      obligation_id: a.obligation_id,
+      action_type: a.action_type,
+      generation: a.generation ?? 1,
+      idempotency_key: a.idempotency_key,
+      status: a.status || 'POLICY_ALLOWED',
+      valid_until: a.valid_until || new Date(Date.now() + 5 * 60 * 1000).toISOString(),
+      claim_worker_id: a.claim_worker_id || null,
+      claim_expires_at: a.claim_expires_at || null,
+      arguments: a.arguments || {},
+      result: a.result || {},
+      created_at: a.created_at || now,
+      updated_at: a.updated_at || now,
+    };
+
+    this.db
+      .prepare(
+        `INSERT INTO recovery_actions (
+          id, case_id, obligation_id, action_type, generation, idempotency_key,
+          status, valid_until, claim_worker_id, claim_expires_at, arguments, result, created_at, updated_at
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
+      )
+      .run(
+        action.id,
+        action.case_id,
+        action.obligation_id,
+        action.action_type,
+        action.generation,
+        action.idempotency_key,
+        action.status,
+        action.valid_until || null,
+        action.claim_worker_id || null,
+        action.claim_expires_at || null,
+        JSON.stringify(action.arguments || {}),
+        JSON.stringify(action.result || null),
+        action.created_at,
+        action.updated_at
+      );
+
+    return action;
+  }
+
+  getRecoveryActionById(id: string): RecoveryAction | null {
+    const row = this.db
+      .prepare('SELECT * FROM recovery_actions WHERE id = ?')
+      .get(id) as any;
+    if (!row) return null;
+    return this.mapRecoveryActionRow(row);
+  }
+
+  getRecoveryActionByIdempotencyKey(key: string): RecoveryAction | null {
+    const row = this.db
+      .prepare('SELECT * FROM recovery_actions WHERE idempotency_key = ?')
+      .get(key) as any;
+    if (!row) return null;
+    return this.mapRecoveryActionRow(row);
+  }
+
+  getRecoveryActionsByCaseId(caseId: string): RecoveryAction[] {
+    const rows = this.db
+      .prepare('SELECT * FROM recovery_actions WHERE case_id = ? ORDER BY created_at ASC')
+      .all(caseId) as any[];
+    return rows.map((r) => this.mapRecoveryActionRow(r));
+  }
+
+  getRecoveryActionsByObligationId(obligationId: string): RecoveryAction[] {
+    const rows = this.db
+      .prepare('SELECT * FROM recovery_actions WHERE obligation_id = ? ORDER BY created_at ASC')
+      .all(obligationId) as any[];
+    return rows.map((r) => this.mapRecoveryActionRow(r));
+  }
+
+  updateRecoveryActionStatus(
+    id: string,
+    status: ActionLifecycleStatus,
+    result?: Record<string, any>
+  ): void {
+    const now = new Date().toISOString();
+    if (result) {
+      this.db
+        .prepare('UPDATE recovery_actions SET status = ?, result = ?, updated_at = ? WHERE id = ?')
+        .run(status, JSON.stringify(result), now, id);
+    } else {
+      this.db
+        .prepare('UPDATE recovery_actions SET status = ?, updated_at = ? WHERE id = ?')
+        .run(status, now, id);
+    }
+  }
+
+  claimActionForExecution(actionId: string, workerId: string, leaseDurationMs: number = 30000): boolean {
+    const now = new Date();
+    const claimExpiresAt = new Date(now.getTime() + leaseDurationMs).toISOString();
+    const nowIso = now.toISOString();
+
+    const info = this.db
+      .prepare(
+        `UPDATE recovery_actions
+         SET status = 'CLAIMED',
+             claim_worker_id = ?,
+             claim_expires_at = ?,
+             updated_at = ?
+         WHERE id = ?
+           AND (status = 'POLICY_ALLOWED' OR (status = 'CLAIMED' AND claim_expires_at < ?))`
+      )
+      .run(workerId, claimExpiresAt, nowIso, actionId, nowIso);
+
+    return Number(info.changes) > 0;
+  }
+
+  cancelPendingActionsForObligation(obligationId: string, reason: string): number {
+    const now = new Date().toISOString();
+    const rows = this.db
+      .prepare(
+        "SELECT id, result FROM recovery_actions WHERE obligation_id = ? AND status IN ('PROPOSED', 'POLICY_ALLOWED', 'CLAIMED')"
+      )
+      .all(obligationId) as any[];
+
+    for (const row of rows) {
+      const existingResult = JSON.parse(row.result || '{}');
+      existingResult.cancellation_reason = reason;
+      this.db
+        .prepare(
+          "UPDATE recovery_actions SET status = 'CANCELLED', result = ?, updated_at = ? WHERE id = ?"
+        )
+        .run(JSON.stringify(existingResult), now, row.id);
+    }
+
+    return rows.length;
+  }
+
+  private mapRecoveryActionRow(r: any): RecoveryAction {
+    return {
+      id: r.id,
+      case_id: r.case_id,
+      obligation_id: r.obligation_id,
+      action_type: r.action_type as ApprovedAction,
+      generation: r.generation,
+      idempotency_key: r.idempotency_key,
+      status: r.status as ActionLifecycleStatus,
+      valid_until: r.valid_until,
+      claim_worker_id: r.claim_worker_id,
+      claim_expires_at: r.claim_expires_at,
+      arguments: JSON.parse(r.arguments || '{}'),
+      result: JSON.parse(r.result || '{}'),
+      created_at: r.created_at,
+      updated_at: r.updated_at,
+    };
+  }
+
+  // ==================== COMMUNICATION LEDGER ====================
+
+  recordCommunicationAttempt(attempt: CommunicationAttempt): void {
+    this.db
+      .prepare(
+        `INSERT INTO communication_ledger (
+          id, obligation_id, case_id, customer_id, channel, template,
+          status, sent_at, delivered_at, failed_at, error_reason, simulated
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
+      )
+      .run(
+        attempt.id,
+        attempt.obligation_id,
+        attempt.case_id,
+        attempt.customer_id || null,
+        attempt.channel,
+        attempt.template,
+        attempt.status,
+        attempt.sent_at,
+        attempt.delivered_at || null,
+        attempt.failed_at || null,
+        attempt.error_reason || null,
+        attempt.simulated ? 1 : 0
+      );
+  }
+
+  getRecentCommunications(obligationId: string, windowHours: number = 24): CommunicationAttempt[] {
+    const cutoff = new Date(Date.now() - windowHours * 60 * 60 * 1000).toISOString();
+    const rows = this.db
+      .prepare(
+        'SELECT * FROM communication_ledger WHERE obligation_id = ? AND sent_at >= ? ORDER BY sent_at DESC'
+      )
+      .all(obligationId, cutoff) as any[];
+
+    return rows.map((r) => this.mapCommunicationRow(r));
+  }
+
+  getCommunicationCount(obligationId: string): number {
+    const row = this.db
+      .prepare(
+        "SELECT COUNT(*) as count FROM communication_ledger WHERE obligation_id = ? AND status != 'SUPPRESSED'"
+      )
+      .get(obligationId) as any;
+    return row?.count || 0;
+  }
+
+  getCommunicationsByCaseId(caseId: string): CommunicationAttempt[] {
+    const rows = this.db
+      .prepare('SELECT * FROM communication_ledger WHERE case_id = ? ORDER BY sent_at DESC')
+      .all(caseId) as any[];
+    return rows.map((r) => this.mapCommunicationRow(r));
+  }
+
+  private mapCommunicationRow(r: any): CommunicationAttempt {
+    return {
+      id: r.id,
+      obligation_id: r.obligation_id,
+      case_id: r.case_id,
+      customer_id: r.customer_id,
+      channel: r.channel,
+      template: r.template,
+      status: r.status,
+      sent_at: r.sent_at,
+      delivered_at: r.delivered_at,
+      failed_at: r.failed_at,
+      error_reason: r.error_reason,
+      simulated: r.simulated === 1,
+    };
+  }
+
   // ==================== AUDIT EVENTS ====================
 
   createAuditEvent(a: AuditEvent): void {
     this.db
       .prepare(
         `INSERT INTO audit_events (
-          id, case_id, event_type, actor, source, metadata, timestamp
-        ) VALUES (?, ?, ?, ?, ?, ?, ?)`
+          id, case_id, obligation_id, event_type, actor, source, metadata, timestamp
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?)`
       )
       .run(
-        a.id,
+        a.id || `aud_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`,
         a.case_id,
+        a.obligation_id || null,
         a.event_type,
-        a.actor,
-        a.source,
-        JSON.stringify(a.metadata),
-        a.timestamp
+        a.actor || 'system',
+        a.source || 'system',
+        JSON.stringify(a.metadata || {}),
+        a.timestamp || new Date().toISOString()
       );
   }
 
@@ -543,6 +918,7 @@ export class Repository {
     return rows.map((r) => ({
       id: r.id,
       case_id: r.case_id,
+      obligation_id: r.obligation_id || null,
       event_type: r.event_type as any,
       actor: r.actor as any,
       source: r.source,

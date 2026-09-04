@@ -1,5 +1,5 @@
 import { ApprovedAction } from '../../domain/types';
-import { SimulatedObservableCase } from '../../simulator/latent-engine';
+import { SimulatedObservableCase, LatentCostBreakdown } from '../../simulator/latent-engine';
 
 export interface StrategyCaseOutcome {
   caseId: string;
@@ -9,10 +9,12 @@ export interface StrategyCaseOutcome {
   policyResult: string;
   recovered: boolean;
   recoveredAmount: number;
+  netRecoveryValue: number;
   isPolicyViolation: boolean;
   isUnnecessaryIntervention: boolean;
   isHardDeclineRetry: boolean;
   executionTimeMs: number;
+  costs?: LatentCostBreakdown;
   diagnosis?: string;
   rationale?: string;
 }

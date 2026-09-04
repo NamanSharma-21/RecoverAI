@@ -127,26 +127,37 @@ export default function BenchmarkStudioPage() {
             <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
               
               {/* RecoverAI Hybrid Card */}
-              <div className="bg-gradient-to-br from-blue-950/40 via-slate-900 to-slate-900 border border-blue-500/40 rounded-2xl p-6 shadow-xl">
+              <div className="bg-gradient-to-br from-blue-950/50 via-slate-900 to-slate-900 border border-blue-500/50 rounded-2xl p-6 shadow-xl relative overflow-hidden">
                 <div className="flex justify-between items-center mb-2">
                   <span className="text-xs font-bold text-blue-400 uppercase tracking-wider">
                     RecoverAI Hybrid
                   </span>
-                  <span className="text-[10px] px-2 py-0.5 rounded bg-blue-500/20 text-blue-300 font-semibold">
-                    PROPOSED SYSTEM
+                  <span className="text-[10px] px-2 py-0.5 rounded bg-blue-500/20 text-blue-300 font-semibold border border-blue-500/30">
+                    RECOMMENDED SYSTEM
                   </span>
                 </div>
-                <div className="text-3xl font-extrabold text-white mt-1">
-                  {formatINR(strategies.recoverai_hybrid?.totalRecoveredRevenue || 0)}
+                <div className="text-xs text-slate-400 font-mono">Net Recovery Value (NRV):</div>
+                <div className="text-3xl font-extrabold text-white mt-0.5">
+                  {formatINR(strategies.recoverai_hybrid?.totalNetRecoveredRevenue || strategies.recoverai_hybrid?.totalRecoveredRevenue || 0)}
                 </div>
-                <div className="text-xs text-slate-400 mt-2 space-y-1">
+                <div className="text-xs text-slate-400 mt-3 space-y-1.5 border-t border-slate-800/80 pt-3">
                   <div className="flex justify-between">
-                    <span>Recovery Rate:</span>
-                    <span className="text-white font-semibold">{strategies.recoverai_hybrid?.recoveryRate}%</span>
+                    <span>Gross Revenue Recovered:</span>
+                    <span className="text-white font-semibold">{formatINR(strategies.recoverai_hybrid?.totalRecoveredRevenue || 0)}</span>
                   </div>
                   <div className="flex justify-between">
-                    <span>Safety Violations:</span>
-                    <span className="text-emerald-400 font-bold">0 violations ✓</span>
+                    <span>Total Operational Costs:</span>
+                    <span className="text-slate-300 font-mono">{formatINR(strategies.recoverai_hybrid?.totalCosts || 0)}</span>
+                  </div>
+                  <div className="flex justify-between">
+                    <span>Safety Fines / Penalties:</span>
+                    <span className="text-emerald-400 font-bold">₹0 (0 breaches) ✓</span>
+                  </div>
+                  <div className="flex justify-between pt-1 border-t border-slate-800/40">
+                    <span className="text-blue-300 font-semibold">Net Incremental vs Baseline:</span>
+                    <span className="text-emerald-400 font-bold">
+                      +{formatINR(strategies.recoverai_hybrid?.incrementalNetRevenueVsRuleBaseline || strategies.recoverai_hybrid?.incrementalRevenueVsRuleBaseline || 0)}
+                    </span>
                   </div>
                 </div>
               </div>
@@ -161,17 +172,26 @@ export default function BenchmarkStudioPage() {
                     BENCHMARK CONTROL
                   </span>
                 </div>
-                <div className="text-3xl font-extrabold text-slate-200 mt-1">
-                  {formatINR(strategies.fixed_rule_baseline?.totalRecoveredRevenue || 0)}
+                <div className="text-xs text-slate-400 font-mono">Net Recovery Value (NRV):</div>
+                <div className="text-3xl font-extrabold text-slate-200 mt-0.5">
+                  {formatINR(strategies.fixed_rule_baseline?.totalNetRecoveredRevenue || strategies.fixed_rule_baseline?.totalRecoveredRevenue || 0)}
                 </div>
-                <div className="text-xs text-slate-400 mt-2 space-y-1">
+                <div className="text-xs text-slate-400 mt-3 space-y-1.5 border-t border-slate-800/80 pt-3">
                   <div className="flex justify-between">
-                    <span>Recovery Rate:</span>
-                    <span className="text-slate-300 font-semibold">{strategies.fixed_rule_baseline?.recoveryRate}%</span>
+                    <span>Gross Revenue Recovered:</span>
+                    <span className="text-slate-300 font-semibold">{formatINR(strategies.fixed_rule_baseline?.totalRecoveredRevenue || 0)}</span>
+                  </div>
+                  <div className="flex justify-between">
+                    <span>Total Operational Costs:</span>
+                    <span className="text-slate-400 font-mono">{formatINR(strategies.fixed_rule_baseline?.totalCosts || 0)}</span>
                   </div>
                   <div className="flex justify-between">
                     <span>Safety Violations:</span>
-                    <span className="text-slate-300 font-bold">0 violations</span>
+                    <span className="text-slate-300 font-semibold">0 violations</span>
+                  </div>
+                  <div className="flex justify-between pt-1 border-t border-slate-800/40">
+                    <span>Net Incremental:</span>
+                    <span className="text-slate-500 font-mono">₹0 (Baseline)</span>
                   </div>
                 </div>
               </div>
@@ -183,21 +203,32 @@ export default function BenchmarkStudioPage() {
                     LLM-Only (No Guardrails)
                   </span>
                   <span className="text-[10px] px-2 py-0.5 rounded bg-rose-500/20 text-rose-400 font-semibold">
-                    ABLATION RISK
+                    HIGH FINANCIAL RISK
                   </span>
                 </div>
-                <div className="text-3xl font-extrabold text-slate-200 mt-1">
-                  {formatINR(strategies.llm_only?.totalRecoveredRevenue || 0)}
+                <div className="text-xs text-slate-400 font-mono">Net Recovery Value (NRV):</div>
+                <div className="text-3xl font-extrabold text-slate-200 mt-0.5">
+                  {formatINR(strategies.llm_only?.totalNetRecoveredRevenue || strategies.llm_only?.totalRecoveredRevenue || 0)}
                 </div>
-                <div className="text-xs text-slate-400 mt-2 space-y-1">
+                <div className="text-xs text-slate-400 mt-3 space-y-1.5 border-t border-slate-800/80 pt-3">
                   <div className="flex justify-between">
-                    <span>Recovery Rate:</span>
-                    <span className="text-slate-300 font-semibold">{strategies.llm_only?.recoveryRate}%</span>
+                    <span>Gross Revenue Recovered:</span>
+                    <span className="text-slate-300 font-semibold">{formatINR(strategies.llm_only?.totalRecoveredRevenue || 0)}</span>
                   </div>
                   <div className="flex justify-between">
-                    <span>Safety Violations:</span>
+                    <span>Total Operational Costs:</span>
+                    <span className="text-rose-300 font-mono">{formatINR(strategies.llm_only?.totalCosts || 0)}</span>
+                  </div>
+                  <div className="flex justify-between">
+                    <span>Safety Fines / Penalties:</span>
                     <span className="text-rose-400 font-bold">
-                      {strategies.llm_only?.policyViolations} Critical Breaches ⚠
+                      {formatINR(strategies.llm_only?.safetyPenalties || 0)} ({strategies.llm_only?.policyViolations} fines)
+                    </span>
+                  </div>
+                  <div className="flex justify-between pt-1 border-t border-slate-800/40">
+                    <span className="text-rose-400">Net Incremental vs Baseline:</span>
+                    <span className={strategies.llm_only?.incrementalNetRevenueVsRuleBaseline < 0 ? 'text-rose-400 font-bold' : 'text-slate-300'}>
+                      {formatINR(strategies.llm_only?.incrementalNetRevenueVsRuleBaseline || 0)}
                     </span>
                   </div>
                 </div>
@@ -207,11 +238,16 @@ export default function BenchmarkStudioPage() {
 
             {/* Detailed 5-Way Comparison Table */}
             <div className="bg-slate-900 border border-slate-800 rounded-2xl shadow-xl overflow-hidden">
-              <div className="p-5 border-b border-slate-800">
-                <h3 className="text-base font-bold text-white">Full 5-Strategy Empirical Comparison</h3>
-                <p className="text-xs text-slate-400 mt-0.5">
-                  Evaluated over {report.heldOutTestCases?.toLocaleString()} held-out test cases
-                </p>
+              <div className="p-5 border-b border-slate-800 flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+                <div>
+                  <h3 className="text-base font-bold text-white">Full 5-Strategy Empirical Comparison</h3>
+                  <p className="text-xs text-slate-400 mt-0.5">
+                    Evaluated over {report.heldOutTestCases?.toLocaleString()} held-out test cases with action-sensitive latent outcome engine.
+                  </p>
+                </div>
+                <div className="text-[11px] text-slate-400 bg-slate-950 px-3 py-1.5 rounded-lg border border-slate-800 font-mono">
+                  NRV = Gross Recovered - Costs - Friction - Penalties
+                </div>
               </div>
 
               <div className="overflow-x-auto">
@@ -219,12 +255,12 @@ export default function BenchmarkStudioPage() {
                   <thead>
                     <tr className="bg-slate-950/60 border-b border-slate-800 text-slate-400 font-medium">
                       <th className="p-4">Strategy</th>
-                      <th className="p-4">Recovered Revenue (₹)</th>
-                      <th className="p-4">Recovery Rate</th>
-                      <th className="p-4">Incr. vs Rule Baseline</th>
-                      <th className="p-4">Safety Violations</th>
-                      <th className="p-4">Hard Decline Fails</th>
-                      <th className="p-4">Avg Execution Time</th>
+                      <th className="p-4">Gross Recovered</th>
+                      <th className="p-4 text-emerald-300 font-bold">Net Recovery Value</th>
+                      <th className="p-4">Operational Costs</th>
+                      <th className="p-4">Safety Fines</th>
+                      <th className="p-4">Net Incr. vs Baseline</th>
+                      <th className="p-4">Policy Breaches</th>
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-slate-800/60 text-slate-200">
@@ -240,20 +276,30 @@ export default function BenchmarkStudioPage() {
                             name
                           )}
                         </td>
-                        <td className="p-4 font-bold text-white">{formatINR(m.totalRecoveredRevenue)}</td>
-                        <td className="p-4">{m.recoveryRate}%</td>
+                        <td className="p-4 font-semibold text-slate-300">{formatINR(m.totalRecoveredRevenue)}</td>
+                        <td className="p-4 font-bold text-white text-sm">
+                          {formatINR(m.totalNetRecoveredRevenue || m.totalRecoveredRevenue)}
+                        </td>
+                        <td className="p-4 font-mono text-slate-400">{formatINR(m.totalCosts || 0)}</td>
+                        <td className="p-4 font-mono">
+                          {m.safetyPenalties > 0 ? (
+                            <span className="text-rose-400 font-bold">{formatINR(m.safetyPenalties)}</span>
+                          ) : (
+                            <span className="text-emerald-400">₹0</span>
+                          )}
+                        </td>
                         <td className="p-4">
                           <span
                             className={
-                              m.incrementalRevenueVsRuleBaseline > 0
+                              (m.incrementalNetRevenueVsRuleBaseline || m.incrementalRevenueVsRuleBaseline) > 0
                                 ? 'text-emerald-400 font-semibold'
-                                : m.incrementalRevenueVsRuleBaseline === 0
+                                : (m.incrementalNetRevenueVsRuleBaseline || m.incrementalRevenueVsRuleBaseline) === 0
                                 ? 'text-slate-400'
-                                : 'text-slate-400'
+                                : 'text-rose-400 font-semibold'
                             }
                           >
-                            {m.incrementalPercentageVsRuleBaseline >= 0 ? '+' : ''}
-                            {m.incrementalPercentageVsRuleBaseline}% ({formatINR(m.incrementalRevenueVsRuleBaseline)})
+                            {(m.incrementalNetRevenueVsRuleBaseline || m.incrementalRevenueVsRuleBaseline) > 0 ? '+' : ''}
+                            {formatINR(m.incrementalNetRevenueVsRuleBaseline || m.incrementalRevenueVsRuleBaseline)}
                           </span>
                         </td>
                         <td className="p-4">
@@ -265,18 +311,37 @@ export default function BenchmarkStudioPage() {
                             <span className="text-emerald-400 font-semibold">0 violations ✓</span>
                           )}
                         </td>
-                        <td className="p-4">
-                          {m.hardDeclineRetries > 0 ? (
-                            <span className="text-rose-400">{m.hardDeclineRetries} retried</span>
-                          ) : (
-                            <span className="text-slate-400">0</span>
-                          )}
-                        </td>
-                        <td className="p-4 font-mono text-slate-400">{m.medianLatencyMs || '< 1'} ms</td>
                       </tr>
                     ))}
                   </tbody>
                 </table>
+              </div>
+            </div>
+
+            {/* Economic Latent Model Transparency Panel */}
+            <div className="bg-slate-900 border border-slate-800 rounded-2xl p-6 shadow-xl space-y-4">
+              <div className="flex items-center justify-between border-b border-slate-800 pb-3">
+                <h4 className="text-sm font-bold text-white flex items-center space-x-2">
+                  <span>🔬 Latent Economic Evaluation Model</span>
+                </h4>
+                <span className="text-[10px] text-slate-400 font-mono">Rigorous Action-Sensitive Ground Truth</span>
+              </div>
+              <p className="text-xs text-slate-300 leading-relaxed">
+                Rather than using static success probabilities, the benchmark generates seeded synthetic transaction streams where each customer has hidden latent willingness to pay, friction tolerance, and payment instrument validity.
+              </p>
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-3 text-xs">
+                <div className="bg-slate-950 p-3 rounded-xl border border-slate-800">
+                  <div className="text-[10px] font-bold uppercase text-slate-400">Outreach Fees</div>
+                  <div className="text-slate-200 mt-1">₹0.50 per WhatsApp/SMS outreach, ₹2.00 per direct bank gateway retry.</div>
+                </div>
+                <div className="bg-slate-950 p-3 rounded-xl border border-slate-800">
+                  <div className="text-[10px] font-bold uppercase text-slate-400">Customer Friction Cost</div>
+                  <div className="text-slate-200 mt-1">₹50 friction fee when retrying hard declines or spamming repeat notifications.</div>
+                </div>
+                <div className="bg-slate-950 p-3 rounded-xl border border-slate-800">
+                  <div className="text-[10px] font-bold uppercase text-rose-400">Statutory Penalties</div>
+                  <div className="text-rose-200 mt-1">₹1,000 regulatory fine per opt-out customer contacted or double-charge attempt.</div>
+                </div>
               </div>
             </div>
 

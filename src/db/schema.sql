@@ -8,9 +8,27 @@ CREATE TABLE IF NOT EXISTS webhook_events (
   processed INTEGER NOT NULL DEFAULT 0
 );
 
+CREATE TABLE IF NOT EXISTS payment_obligations (
+  id TEXT PRIMARY KEY,
+  merchant_id TEXT NOT NULL,
+  order_id TEXT NOT NULL UNIQUE,
+  amount_minor INTEGER NOT NULL,
+  currency TEXT NOT NULL,
+  status TEXT NOT NULL,
+  satisfied_at TEXT,
+  satisfied_by_payment_id TEXT,
+  created_at TEXT NOT NULL,
+  updated_at TEXT NOT NULL,
+  expires_at TEXT
+);
+
+CREATE INDEX IF NOT EXISTS idx_payment_obligations_order ON payment_obligations(order_id);
+CREATE INDEX IF NOT EXISTS idx_payment_obligations_status ON payment_obligations(status);
+
 CREATE TABLE IF NOT EXISTS recovery_cases (
   id TEXT PRIMARY KEY,
   merchant_id TEXT NOT NULL,
+  obligation_id TEXT,
   event_id TEXT NOT NULL,
   payment_id TEXT NOT NULL,
   order_id TEXT,
@@ -35,6 +53,7 @@ CREATE TABLE IF NOT EXISTS recovery_cases (
 CREATE INDEX IF NOT EXISTS idx_recovery_cases_status ON recovery_cases(status);
 CREATE INDEX IF NOT EXISTS idx_recovery_cases_payment ON recovery_cases(payment_id);
 CREATE INDEX IF NOT EXISTS idx_recovery_cases_order ON recovery_cases(order_id);
+CREATE INDEX IF NOT EXISTS idx_recovery_cases_obligation ON recovery_cases(obligation_id);
 
 CREATE TABLE IF NOT EXISTS decisions (
   id TEXT PRIMARY KEY,
@@ -90,9 +109,51 @@ CREATE TABLE IF NOT EXISTS tool_executions (
 CREATE INDEX IF NOT EXISTS idx_tool_executions_case ON tool_executions(case_id);
 CREATE INDEX IF NOT EXISTS idx_tool_executions_idemp ON tool_executions(idempotency_key);
 
+CREATE TABLE IF NOT EXISTS recovery_actions (
+  id TEXT PRIMARY KEY,
+  case_id TEXT NOT NULL,
+  obligation_id TEXT NOT NULL,
+  action_type TEXT NOT NULL,
+  generation INTEGER NOT NULL,
+  idempotency_key TEXT NOT NULL UNIQUE,
+  status TEXT NOT NULL,
+  valid_until TEXT NOT NULL,
+  claim_worker_id TEXT,
+  claim_expires_at TEXT,
+  arguments TEXT NOT NULL,
+  result TEXT NOT NULL,
+  created_at TEXT NOT NULL,
+  updated_at TEXT NOT NULL,
+  FOREIGN KEY (case_id) REFERENCES recovery_cases(id) ON DELETE CASCADE
+);
+
+CREATE INDEX IF NOT EXISTS idx_recovery_actions_case ON recovery_actions(case_id);
+CREATE INDEX IF NOT EXISTS idx_recovery_actions_obligation ON recovery_actions(obligation_id);
+CREATE INDEX IF NOT EXISTS idx_recovery_actions_idemp ON recovery_actions(idempotency_key);
+CREATE INDEX IF NOT EXISTS idx_recovery_actions_status ON recovery_actions(status);
+
+CREATE TABLE IF NOT EXISTS communication_ledger (
+  id TEXT PRIMARY KEY,
+  obligation_id TEXT NOT NULL,
+  case_id TEXT NOT NULL,
+  customer_id TEXT,
+  channel TEXT NOT NULL,
+  template TEXT NOT NULL,
+  status TEXT NOT NULL,
+  sent_at TEXT NOT NULL,
+  delivered_at TEXT,
+  failed_at TEXT,
+  error_reason TEXT,
+  simulated INTEGER NOT NULL DEFAULT 1
+);
+
+CREATE INDEX IF NOT EXISTS idx_comm_ledger_obligation ON communication_ledger(obligation_id);
+CREATE INDEX IF NOT EXISTS idx_comm_ledger_customer ON communication_ledger(customer_id);
+
 CREATE TABLE IF NOT EXISTS audit_events (
   id TEXT PRIMARY KEY,
   case_id TEXT NOT NULL,
+  obligation_id TEXT,
   event_type TEXT NOT NULL,
   actor TEXT NOT NULL,
   source TEXT NOT NULL,
@@ -101,6 +162,7 @@ CREATE TABLE IF NOT EXISTS audit_events (
 );
 
 CREATE INDEX IF NOT EXISTS idx_audit_events_case_id ON audit_events(case_id);
+CREATE INDEX IF NOT EXISTS idx_audit_events_obligation ON audit_events(obligation_id);
 CREATE INDEX IF NOT EXISTS idx_audit_events_timestamp ON audit_events(timestamp);
 
 CREATE TABLE IF NOT EXISTS merchant_settings (

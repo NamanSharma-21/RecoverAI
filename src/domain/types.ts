@@ -54,6 +54,71 @@ export type CaseStatus =
   | 'ACTION_SELECTED'
   | 'POLICY_CHECKED';
 
+export type ObligationStatus =
+  | 'OPEN'
+  | 'PARTIALLY_SATISFIED'
+  | 'SATISFIED'
+  | 'EXPIRED'
+  | 'CANCELLED'
+  | 'UNKNOWN';
+
+export interface PaymentObligation {
+  id: string;
+  merchant_id: string;
+  order_id: string;
+  amount_minor: number; // safe integer minor units (paise)
+  currency: string;
+  status: ObligationStatus;
+  satisfied_at?: string | null;
+  satisfied_by_payment_id?: string | null;
+  created_at: string;
+  updated_at: string;
+  expires_at?: string | null;
+}
+
+export type ActionLifecycleStatus =
+  | 'PROPOSED'
+  | 'POLICY_ALLOWED'
+  | 'CLAIMED'
+  | 'EXECUTING'
+  | 'EXECUTED'
+  | 'OUTCOME_PENDING'
+  | 'SUCCEEDED'
+  | 'FAILED'
+  | 'CANCELLED';
+
+export interface RecoveryAction {
+  id: string;
+  case_id: string;
+  obligation_id: string;
+  action_type: ApprovedAction;
+  generation: number; // generation/attempt index for deterministic idempotency
+  idempotency_key: string;
+  status: ActionLifecycleStatus;
+  valid_until: string; // ISO timestamp for staleness prevention
+  claim_worker_id?: string | null;
+  claim_expires_at?: string | null;
+  arguments: Record<string, any>;
+  result: Record<string, any>;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface CommunicationAttempt {
+  id: string;
+  obligation_id: string;
+  case_id: string;
+  customer_id?: string;
+  channel: 'WHATSAPP' | 'SMS' | 'EMAIL' | 'PAYMENT_LINK_PAGE';
+  template: string;
+  status: 'QUEUED' | 'SENT' | 'DELIVERED' | 'FAILED' | 'SUPPRESSED';
+  sent_at: string;
+  delivered_at?: string | null;
+  failed_at?: string | null;
+  error_reason?: string | null;
+  simulated: boolean;
+}
+
 export type PolicyResult = 'ALLOW' | 'BLOCK' | 'ESCALATE';
 
 export type ConsentStatus = 'CONSENTED' | 'OPTED_OUT' | 'UNKNOWN';
@@ -88,6 +153,7 @@ export interface PaymentFailureContext {
 export interface RecoveryCase {
   id: string;
   merchant_id: string;
+  obligation_id?: string | null;
   event_id: string;
   payment_id: string;
   order_id?: string | null;
@@ -171,16 +237,43 @@ export type AuditEventType =
   | 'CASE_CLOSED'
   | 'HUMAN_REVIEW_TRIGGERED'
   | 'HUMAN_ACTION_TAKEN'
-  | 'PAYMENT_SUCCESS_INTERRUPT';
+  | 'PAYMENT_SUCCESS_INTERRUPT'
+  | 'OBLIGATION_CREATED'
+  | 'OBLIGATION_SATISFIED'
+  | 'ACTION_PROPOSED'
+  | 'ACTION_CLAIMED'
+  | 'ACTION_CANCELLED'
+  | 'COMMUNICATION_SUPPRESSED'
+  | 'COMMUNICATION_DISPATCHED';
 
 export interface AuditEvent {
   id: string;
   case_id: string;
+  obligation_id?: string | null;
+  correlation_id?: string | null;
   event_type: AuditEventType;
   actor: 'SYSTEM' | 'LLM' | 'POLICY' | 'TOOL' | 'MERCHANT_OPERATOR' | 'PAYMENT_GATEWAY';
   source: string;
   metadata: Record<string, any>;
   timestamp: string;
+}
+
+export function toMinorUnits(amountRupees: number): number {
+  if (!Number.isFinite(amountRupees) || amountRupees < 0) {
+    throw new Error(`Invalid financial amount: ${amountRupees}. Must be non-negative finite number.`);
+  }
+  return Math.round(amountRupees * 100);
+}
+
+export function toDisplayCurrency(amountMinor: number, currency: string = 'INR'): string {
+  if (!Number.isSafeInteger(amountMinor) || amountMinor < 0) {
+    throw new Error(`Invalid minor currency units: ${amountMinor}. Must be a non-negative integer.`);
+  }
+  const formatted = (amountMinor / 100).toLocaleString('en-IN', {
+    minimumFractionDigits: 2,
+    maximumFractionDigits: 2,
+  });
+  return currency === 'INR' ? `₹${formatted}` : `${currency} ${formatted}`;
 }
 
 export interface WebhookEventRecord {

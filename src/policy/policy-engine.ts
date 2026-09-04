@@ -9,9 +9,17 @@ import {
 import { PolicyRules } from './rules';
 
 export class PolicyEngine {
-  constructor(private config: MerchantPolicyConfig = DEFAULT_MERCHANT_POLICY) {}
+  private config: MerchantPolicyConfig;
 
-  evaluate(c: RecoveryCase, d: Decision): PolicyCheck {
+  constructor(config?: Partial<MerchantPolicyConfig>) {
+    this.config = { ...DEFAULT_MERCHANT_POLICY, ...(config || {}) } as MerchantPolicyConfig;
+  }
+
+  evaluate(
+    c: RecoveryCase,
+    d: Decision,
+    options?: { obligationStatus?: string; maxValidityMinutes?: number }
+  ): PolicyCheck {
     const reasons: string[] = [];
     let shouldBlock = false;
     let shouldEscalate = false;
@@ -23,11 +31,18 @@ export class PolicyEngine {
       reasons.push(openCheck.reason!);
     }
 
-    // 2. Already succeeded check
-    const successCheck = PolicyRules.checkPaymentNotAlreadySucceeded(c);
+    // 2. Already succeeded check (including commercial obligation check)
+    const successCheck = PolicyRules.checkPaymentNotAlreadySucceeded(c, options?.obligationStatus);
     if (!successCheck.ok) {
       shouldBlock = true;
       reasons.push(successCheck.reason!);
+    }
+
+    // 2b. Decision staleness check
+    const staleCheck = PolicyRules.checkDecisionNotStale(d, options?.maxValidityMinutes || 5);
+    if (!staleCheck.ok) {
+      shouldBlock = true;
+      reasons.push(staleCheck.reason!);
     }
 
     // 3. Customer opt-out check

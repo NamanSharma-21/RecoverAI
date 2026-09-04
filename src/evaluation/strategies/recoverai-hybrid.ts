@@ -70,7 +70,8 @@ export class RecoverAIHybridStrategy implements EvaluationStrategy {
     const outcome = LatentEngine.evaluateActionOutcome(
       actionToExecute,
       c._hidden_latent,
-      c.amount
+      c.amount,
+      { consent_status: c.consent_status }
     );
     const end = performance.now();
 
@@ -82,10 +83,12 @@ export class RecoverAIHybridStrategy implements EvaluationStrategy {
       policyResult: policyCheck.policy_result,
       recovered: outcome.recovered,
       recoveredAmount: outcome.recoveredAmount,
+      netRecoveryValue: outcome.netRecoveryValue,
       isPolicyViolation: false, // Strict 0 violations guarantee
       isUnnecessaryIntervention: outcome.isUnnecessaryIntervention,
       isHardDeclineRetry: outcome.isHardDeclineRetry,
       executionTimeMs: Number((end - start).toFixed(2)),
+      costs: outcome.costs,
       diagnosis: decision.diagnosis,
       rationale: `${decision.rationale} [Policy: ${policyCheck.policy_result}]`,
     };

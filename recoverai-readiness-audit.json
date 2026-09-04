@@ -1,0 +1,375 @@
+{
+  "audit_version": "1.0.0",
+  "audit_date": "2026-09-04T15:20:00.000Z",
+  "target_url": "http://localhost:3000/",
+  "application": {
+    "name": "recoverai",
+    "version": "0.1.0",
+    "framework": "Next.js 14.2.24 (App Router)",
+    "runtime": "Node.js v26.4.0",
+    "database": "node:sqlite (DatabaseSync) in WAL mode",
+    "orm_or_query_layer": "Raw SQL with parameterized statements in Repository class",
+    "styling": "Tailwind CSS 3.4.17",
+    "test_runner": "Vitest 3.0.7",
+    "status": "RUNNING on port 3000"
+  },
+  "routes": [
+    {
+      "path": "/",
+      "type": "PAGE",
+      "component": "src/app/page.tsx",
+      "purpose": "Merchant Recovery Control Center dashboard displaying real-time recovery metrics, active opportunities table, economic priority ranking, and test recovery triggers",
+      "status_code_runtime": 200,
+      "functional_status": "PARTIAL",
+      "issues": [
+        "Clicking '⚡ Ingest Test Recovery' triggers POST /api/razorpay/create-test-recovery which fails with HTTP 500 on running data/recoverai.db due to missing recovery_url column"
+      ]
+    },
+    {
+      "path": "/cases/[id]",
+      "type": "PAGE",
+      "component": "src/app/cases/[id]/page.tsx",
+      "purpose": "Case journey explainability view: 7-step visual recovery storyboard, Commercial Obligation & Payment Truth Precedence panel, 'Why Did We Act? / Why Did We NOT Act?' explainability cards, worker lease table, and immutable audit timeline",
+      "status_code_runtime": 200,
+      "functional_status": "WORKING"
+    },
+    {
+      "path": "/benchmark",
+      "type": "PAGE",
+      "component": "src/app/benchmark/page.tsx",
+      "purpose": "Synthetic Benchmark & Ablation Analysis studio comparing 5 candidate strategies across Net Recovery Value, costs, and policy violations on seeded datasets",
+      "status_code_runtime": 200,
+      "functional_status": "WORKING"
+    },
+    {
+      "path": "/demo",
+      "type": "PAGE",
+      "component": "src/app/demo/page.tsx",
+      "purpose": "Golden Demo & Verification Studio: 2 flagship 5-minute product stories, 10 golden fixtures, 4 red-team live triggers, and 4-step pipeline live visualizer",
+      "status_code_runtime": 200,
+      "functional_status": "PARTIAL",
+      "issues": [
+        "Executing scenarios via POST /api/simulator/trigger returns HTTP 500 on running data/recoverai.db due to missing column recovery_url"
+      ]
+    },
+    {
+      "path": "/settings",
+      "type": "PAGE",
+      "component": "src/app/settings/page.tsx",
+      "purpose": "Merchant Policy & Guardrails Configuration screen for financial thresholds, autonomous limits, and retry limits stored dynamically in SQLite",
+      "status_code_runtime": 200,
+      "functional_status": "WORKING"
+    },
+    {
+      "path": "/architecture",
+      "type": "PAGE",
+      "component": "src/app/architecture/page.tsx",
+      "purpose": "Interactive visual presentation of The 5 Laws of RecoverAI with invariant explorer and architectural code enforcement examples",
+      "status_code_runtime": 200,
+      "functional_status": "WORKING"
+    },
+    {
+      "path": "/recover/[id]",
+      "type": "PAGE",
+      "component": "src/app/recover/[id]/page.tsx",
+      "purpose": "Consumer-facing multi-rail checkout page for payment recovery with UPI, Card, and Netbanking rails",
+      "status_code_runtime": 200,
+      "functional_status": "BROKEN",
+      "issues": [
+        "Line 37 in src/app/recover/[id]/page.tsx executes setCaseData(data.data.case); but GET /api/cases/[id] returns { success: true, case: c } without a 'data' wrapper. This throws a TypeError: Cannot read properties of undefined (reading 'case') caught silently, causing the page to permanently display 'Payment Session Not Found. This recovery link may have expired or is invalid.'"
+      ]
+    },
+    {
+      "path": "/api/cases",
+      "type": "API_ROUTE",
+      "component": "src/app/api/cases/route.ts",
+      "methods": ["GET"],
+      "status_code_runtime": 200,
+      "functional_status": "WORKING"
+    },
+    {
+      "path": "/api/cases/[id]",
+      "type": "API_ROUTE",
+      "component": "src/app/api/cases/[id]/route.ts",
+      "methods": ["GET"],
+      "status_code_runtime": 200,
+      "functional_status": "WORKING"
+    },
+    {
+      "path": "/api/cases/[id]/review",
+      "type": "API_ROUTE",
+      "component": "src/app/api/cases/[id]/review/route.ts",
+      "methods": ["POST"],
+      "status_code_runtime": 200,
+      "functional_status": "WORKING"
+    },
+    {
+      "path": "/api/cases/[id]/complete-payment",
+      "type": "API_ROUTE",
+      "component": "src/app/api/cases/[id]/complete-payment/route.ts",
+      "methods": ["POST"],
+      "status_code_runtime": 200,
+      "functional_status": "WORKING"
+    },
+    {
+      "path": "/api/benchmark/run",
+      "type": "API_ROUTE",
+      "component": "src/app/api/benchmark/run/route.ts",
+      "methods": ["POST"],
+      "status_code_runtime": 200,
+      "functional_status": "WORKING"
+    },
+    {
+      "path": "/api/benchmark/results",
+      "type": "API_ROUTE",
+      "component": "src/app/api/benchmark/results/route.ts",
+      "methods": ["GET"],
+      "status_code_runtime": 200,
+      "functional_status": "WORKING"
+    },
+    {
+      "path": "/api/settings",
+      "type": "API_ROUTE",
+      "component": "src/app/api/settings/route.ts",
+      "methods": ["GET", "POST"],
+      "status_code_runtime": 200,
+      "functional_status": "WORKING"
+    },
+    {
+      "path": "/api/simulator/trigger",
+      "type": "API_ROUTE",
+      "component": "src/app/api/simulator/trigger/route.ts",
+      "methods": ["POST"],
+      "status_code_runtime": 500,
+      "functional_status": "BROKEN_ON_PERSISTED_DB",
+      "issues": [
+        "Fails with SQLite error 'table recovery_cases has no column named recovery_url' on data/recoverai.db"
+      ]
+    },
+    {
+      "path": "/api/razorpay/status",
+      "type": "API_ROUTE",
+      "component": "src/app/api/razorpay/status/route.ts",
+      "methods": ["GET"],
+      "status_code_runtime": 200,
+      "functional_status": "WORKING"
+    },
+    {
+      "path": "/api/razorpay/create-test-recovery",
+      "type": "API_ROUTE",
+      "component": "src/app/api/razorpay/create-test-recovery/route.ts",
+      "methods": ["POST"],
+      "status_code_runtime": 500,
+      "functional_status": "BROKEN_ON_PERSISTED_DB",
+      "issues": [
+        "Fails with SQLite error 'table recovery_cases has no column named recovery_url' on data/recoverai.db"
+      ]
+    },
+    {
+      "path": "/api/webhooks/razorpay",
+      "type": "API_ROUTE",
+      "component": "src/app/api/webhooks/razorpay/route.ts",
+      "methods": ["POST"],
+      "status_code_runtime": 500,
+      "functional_status": "BROKEN_ON_PERSISTED_DB",
+      "issues": [
+        "Fails with SQLite error 'table recovery_cases has no column named recovery_url' when processing payment.failed events against data/recoverai.db"
+      ]
+    }
+  ],
+  "architecture": {
+    "intended_loop": "PAYMENT_FAILED -> CONTEXT -> DIAGNOSE -> SCORE -> DECIDE -> POLICY CHECK -> EXECUTE -> VERIFY -> RECOVER / ESCALATE / STOP",
+    "actual_implementation": "Fully implemented across ContextBuilder, DecisionService, PolicyEngine, PreFlightGuard, ToolExecutor, and PaymentTruthResolver",
+    "isolation_boundary": "LLM receives structured context only; has no tool-calling capability, no external network access, and no Razorpay API credentials; communicates exclusively via structured JSON validated by Zod schema AIDecisionOutputSchema",
+    "policy_firewall": "Deterministic PolicyEngine evaluates 9 checks immediately following AI decision and immediately before tool dispatch; PreFlightGuard evaluates live obligation state at millisecond of tool execution"
+  },
+  "database_and_migrations": {
+    "db_engine": "node:sqlite DatabaseSync",
+    "journal_mode": "WAL",
+    "foreign_keys": "ON",
+    "critical_schema_drift": {
+      "detected": true,
+      "severity": "BLOCKER",
+      "details": "The persisted database at data/recoverai.db is missing the recovery_url column in table recovery_cases, and missing 6 columns in table decisions ('failure_category', 'recoverability', 'expected_recovery_value', 'timing', 'reason', 'customer_friction'). In src/db/database.ts, runMigrations() only checks and alters for 'obligation_id' in recovery_cases and audit_events, completely omitting migrations for the other newly added columns. In-memory unit tests pass because they execute SCHEMA_SQL from scratch, masking this fatal runtime bug."
+    }
+  },
+  "payment_truth": {
+    "precedence_model": {
+      "tier_1": "AUTHORITATIVE_EVENT (HMAC-SHA256 verified Razorpay webhook payment.captured/payment_link.paid)",
+      "tier_2": "PROVIDER_QUERY (Synchronous Razorpay API query)",
+      "tier_3": "PERSISTED_STATE (Local SQLite database)",
+      "tier_4": "LLM_DECISION (Zero authority over financial truth)",
+      "tier_5": "UI_STATE / CLIENT_INPUT (Zero authority over financial truth)"
+    },
+    "implementation_file": "src/truth/payment-truth-resolver.ts",
+    "verified_interrupt": "When an authoritative capture event is ingested, PaymentTruthResolver marks PaymentObligation SATISFIED and immediately calls cancelPendingActionsForObligation(), cancelling all pending/claimed recovery actions."
+  },
+  "obligation_model": {
+    "modeled_entity": "PaymentObligation (table: payment_obligations)",
+    "attributes": ["id", "merchant_id", "order_id (UNIQUE)", "amount_minor", "currency", "status", "satisfied_at", "satisfied_by_payment_id"],
+    "order_cardinality": "One-to-one between commercial order and PaymentObligation. Multiple failed payment attempts (and recovery cases) map to the exact same obligation_id.",
+    "satisfaction_query": "truthResolver.isObligationSatisfied(obligationId) or repository.getObligationByOrderId(orderId).status === 'SATISFIED'",
+    "evaluation": "Genuinely separates obligation from ephemeral payment attempts."
+  },
+  "idempotency": {
+    "key_format": "idemp_${obligationKey}_${action}_gen${generation}",
+    "deterministic": true,
+    "db_enforcement": "UNIQUE index on idempotency_key in both recovery_actions and tool_executions tables",
+    "worker_leasing": "claimActionForExecution() uses atomic conditional SQL update: UPDATE recovery_actions SET status='CLAIMED', claim_worker_id=?, claim_expires_at=? WHERE id=? AND (status='POLICY_ALLOWED' OR (status='CLAIMED' AND claim_expires_at < ?))",
+    "tested": "Verified by tests/unit/action-idempotency.test.ts and tests/unit/races-and-failure-injection.test.ts"
+  },
+  "policy_engine": {
+    "implementation_file": "src/policy/rules.ts and src/policy/policy-engine.ts",
+    "deterministic_checks": [
+      "Check 1: Case is still open (not in terminal RECOVERED or STOPPED status)",
+      "Check 2: Commercial payment obligation is not already SATISFIED",
+      "Check 2b: Decision proposal is not stale (created within max 5 minutes)",
+      "Check 3: Customer has not opted out (consent_status !== 'OPTED_OUT')",
+      "Check 4: Action is in allowed vocabulary and merchant policy configuration",
+      "Check 5: Required diagnostic evidence is present",
+      "Check 6: Tiered amount policy (under ₹5,000 autonomous, ₹5,000–₹25,000 1 bounded intervention, above ₹25,000 human review)",
+      "Check 7: Max interventions / retry limit not exceeded",
+      "Check 8: Hard decline category match (prohibits direct retry on EXPIRED_CARD, STOLEN_CARD, CARD_BLOCKED, etc.)",
+      "Check 9: Confidence threshold check (confidence >= merchant min_confidence_for_autonomous_action)"
+    ],
+    "human_review_bypass": "IMPOSSIBLE. Human operator action in handleHumanReview() constructs an operator decision and explicitly runs through PolicyEngine.evaluate(). If an operator approves a direct retry on an expired card or an opted-out customer, the policy engine rejects the operator action."
+  },
+  "ai_layer": {
+    "provider_abstraction": "LLMClient in src/agent/llm-client.ts",
+    "default_client": "MockLLMClient (deterministic mock based on observable features)",
+    "production_client": "OpenAILLMClient (JSON mode, temperature 0.1)",
+    "validation": "AIDecisionOutputSchema (Zod) validates diagnosis, failure_category, recoverability, expected_recovery_value, recommended_action, timing, confidence, reason, customer_friction, evidence",
+    "failure_handling": "Bounded retry (up to 2 retries) upon malformed JSON; safe deterministic system_fallback upon exhaustion"
+  },
+  "communication": {
+    "status": "SIMULATED / MOCKED",
+    "ledger_table": "communication_ledger",
+    "critical_dead_code": {
+      "detected": true,
+      "severity": "HIGH",
+      "details": "CommunicationLedgerManager.canContactCustomer() contains cooldown and contact frequency logic, but it is NEVER invoked anywhere in RecoveryControlLoop, PolicyEngine, or ToolExecutor. The control loop unconditionally calls recordAttempt() without calling canContactCustomer()."
+    }
+  },
+  "benchmark": {
+    "runner_file": "src/evaluation/runner.ts",
+    "generator_file": "src/simulator/generator.ts",
+    "latent_engine": "src/simulator/latent-engine.ts",
+    "dataset": "Seeded Mulberry32 PRNG (seed=42), 5,000 total cases, 2,500 held-out test split, 6 payment archetypes",
+    "metrics_calculated": [
+      "totalCases", "totalRevenueAtRisk", "totalRecoveredRevenue", "recoveryRate",
+      "totalNetRecoveredRevenue", "netRecoveryRate", "totalCosts", "safetyPenalties",
+      "costBreakdown", "incrementalRevenueVsRuleBaseline", "incrementalPercentageVsRuleBaseline",
+      "incrementalNetRevenueVsRuleBaseline", "incrementalNetPercentageVsRuleBaseline",
+      "policyViolations", "hardDeclineRetries", "unnecessaryInterventions", "escalations", "averageLatencyMs"
+    ],
+    "flaws_and_anomalies": [
+      {
+        "issue": "PolicyOnlyStrategy crippled by omission of ESCALATE handling",
+        "file": "src/evaluation/strategies/policy-only.ts:78",
+        "details": "PolicyOnlyStrategy sets actionToExecute = policyCheck.allowed ? ruleAction : 'STOP'. When policy returns ESCALATE, policyCheck.allowed is false, so it sets actionToExecute = 'STOP'. In contrast, recoverai_hybrid explicitly handles else if (policyCheck.policy_result === 'ESCALATE') actionToExecute = 'ESCALATE'. This artificially crushes Policy-Only recovery to 2.68% (₹15,45,919) compared to 80.82% for Fixed Rules and 80.95% for Hybrid, creating a misleading baseline comparison."
+      },
+      {
+        "issue": "LLM-Only and RecoverAI Hybrid have 100% identical gross recovered revenue",
+        "details": "Both strategies achieve exactly ₹4,68,99,220.35 in gross recovered revenue down to the paisa. This occurs because MockLLMClient already encodes the safe failure category decisions, and for the 94 opt-out cases, LLM-Only is penalized to ₹0 by LatentEngine while Hybrid blocks them to ₹0. Thus both recover ₹0 on those 94 cases."
+      },
+      {
+        "issue": "Extremely small incremental net uplift over fixed rules",
+        "details": "RecoverAI Hybrid net revenue is ₹4,67,74,971.56 vs Fixed Rule Baseline net of ₹4,66,97,039.35, representing an uplift of only +₹77,932.21 (+0.17%). The pitch cannot claim substantial double-digit recovery uplift over rules on this benchmark."
+      }
+    ]
+  },
+  "security": {
+    "secret_leakage": "CLEAN. No secret values found in source code or committed git history.",
+    "sql_injection": "SAFE. All queries use parameterized statements (?) via DatabaseSync.",
+    "arbitrary_tool_execution": "BLOCKED. ToolExecutor only executes actions matching ApprovedActionSchema enum.",
+    "prompt_injection_resistance": "PASS. Untrusted text is treated strictly as passive data string in ContextBuilder and does not override enum-bounded decision schemas.",
+    "webhook_signature_verification": "IMPLEMENTED via HMAC-SHA256 crypto.timingSafeEqual(). Note: passes through if no secret configured and in mock mode."
+  },
+  "tests": {
+    "total_test_files": 13,
+    "total_tests": 60,
+    "passing": 60,
+    "failing": 0,
+    "test_duration_ms": 649,
+    "blind_spot": "All tests run against in-memory SQLite (createMemoryDatabase()), allowing the missing columns on the disk database (data/recoverai.db) to go undetected by CI."
+  },
+  "findings": [
+    {
+      "id": "FINDING-01",
+      "severity": "CRITICAL_BLOCKER",
+      "category": "RUNTIME_DATABASE",
+      "title": "Database schema drift in data/recoverai.db crashes live runtime APIs",
+      "description": "The disk database data/recoverai.db is missing column recovery_url in recovery_cases and 6 columns in decisions. Calling POST /api/simulator/trigger, POST /api/razorpay/create-test-recovery, or ingesting a webhook crashes with HTTP 500.",
+      "file": "src/db/database.ts:191-211",
+      "function": "runMigrations()"
+    },
+    {
+      "id": "FINDING-02",
+      "severity": "CRITICAL_BLOCKER",
+      "category": "CONSUMER_UX",
+      "title": "Consumer recovery page (/recover/[id]) permanently broken by object wrapping mismatch",
+      "description": "src/app/recover/[id]/page.tsx line 37 accesses data.data.case, but GET /api/cases/[id] returns { success: true, case: c } without a 'data' wrapper. This throws an uncaught TypeError, permanently rendering 'Payment Session Not Found'.",
+      "file": "src/app/recover/[id]/page.tsx:37",
+      "function": "fetchCase()"
+    },
+    {
+      "id": "FINDING-03",
+      "severity": "HIGH",
+      "category": "BENCHMARK_CREDIBILITY",
+      "title": "Policy-Only strategy artificially crippled by broken ESCALATE branch",
+      "description": "In src/evaluation/strategies/policy-only.ts line 78, cases requiring escalation are assigned action 'STOP' instead of 'ESCALATE', collapsing its recovery rate to 2.68% and distorting the benchmark comparison.",
+      "file": "src/evaluation/strategies/policy-only.ts:78",
+      "function": "evaluateCase()"
+    },
+    {
+      "id": "FINDING-04",
+      "severity": "HIGH",
+      "category": "BENCHMARK_CREDIBILITY",
+      "title": "Mock LLM Client encodes policy rules, causing identical gross revenue between LLM-Only and Hybrid",
+      "description": "MockLLMClient checks is_high_value, max_retries, and failure categories internally, which duplicates policy rules and results in identical gross recovery (₹4,68,99,220) between LLM-Only and Hybrid.",
+      "file": "src/agent/llm-client.ts:43-114",
+      "function": "MockLLMClient.generateDecision()"
+    },
+    {
+      "id": "FINDING-05",
+      "severity": "MEDIUM",
+      "category": "COMMUNICATION_SAFETY",
+      "title": "CommunicationLedgerManager.canContactCustomer() is dead code",
+      "description": "The 15-minute cooldown and contact frequency limit logic is implemented in canContactCustomer() but is never called anywhere in the execution loop.",
+      "file": "src/communication/communication-ledger.ts:20",
+      "function": "canContactCustomer()"
+    },
+    {
+      "id": "FINDING-06",
+      "severity": "MEDIUM",
+      "category": "PROVIDER_ADAPTER",
+      "title": "RazorpayAdapter.retryPayment() always delegates to in-memory simulator",
+      "description": "Even when live test keys are configured, RazorpayAdapter.retryPayment() delegates to fallbackSimulator.retryPayment() because Razorpay REST API does not support single-call customer card retries.",
+      "file": "src/adapters/razorpay-adapter.ts:269",
+      "function": "retryPayment()"
+    }
+  ],
+  "must_fix": [
+    "Fix runMigrations() in src/db/database.ts to check and add missing columns ('recovery_url' to recovery_cases; 'failure_category', 'recoverability', 'expected_recovery_value', 'timing', 'reason', 'customer_friction' to decisions), or wipe/recreate data/recoverai.db so runtime APIs do not crash with 500.",
+    "Fix src/app/recover/[id]/page.tsx line 37 to read data.case || data.data?.case so the customer recovery checkout page renders properly.",
+    "Fix src/evaluation/strategies/policy-only.ts to handle policy_result === 'ESCALATE' by setting actionToExecute = 'ESCALATE', restoring policy-only strategy to its legitimate performance.",
+    "Wire canContactCustomer() into RecoveryControlLoop before calling recordAttempt() to ensure communication cooldown is actively enforced.",
+    "Ensure the demo script and benchmark pitch do not overclaim recovery uplift (accurately state +0.17% net uplift and highlight the real win: eliminating 94 policy violations and ₹94,000 in regulatory/network penalties)."
+  ],
+  "recommended": [
+    "Add an integration test running against the actual data/recoverai.db disk file in addition to :memory: to catch migration drift.",
+    "Persist SimulatorAdapter payment links and payments to SQLite rather than in-memory Maps so that simulated entities survive server restarts.",
+    "Add visual indicators on the dashboard and case pages showing whether the active backend provider is Razorpay Test Mode or Simulator Mode.",
+    "Include a 'Reset Demo Database' button in the dashboard to seed clean initial demo records."
+  ],
+  "production_hardening": [
+    "Migrate from in-process SQLite conditional updates to distributed Redis locks / leases for multi-instance horizontal scaling.",
+    "Replace immediate synchronous webhook execution with an asynchronous queue (e.g. BullMQ / Inngest) with exponential backoff and dead-letter queues.",
+    "Implement real communication channels (WhatsApp Cloud API / Twilio SMS) with webhook delivery receipts and statutory opt-out unsubscription links.",
+    "Integrate Razorpay webhook replay tolerance window (reject events with created_at older than 24 hours)."
+  ],
+  "submission_readiness": {
+    "status": "READY WITH FIXES",
+    "summary": "RecoverAI possesses an outstanding, production-shaped architecture that rigorously adheres to the principle 'AI proposes, Policy controls, Tools execute, Verified events determine truth'. Its payment obligation model, truth precedence hierarchy, deterministic idempotency, and 60-test verification suite are top-tier. However, two critical runtime bugs (SQLite disk schema drift crashing failure ingestion with 500, and an object-path bug in the consumer recovery page) and two benchmark integrity issues (crippled policy-only baseline and identical gross revenue) must be resolved before submission."
+  }
+}

@@ -35,42 +35,121 @@ export interface SimulatedObservableCase {
   _hidden_latent: HiddenLatentState; // Kept isolated from agent context
 }
 
+export interface LatentCostBreakdown {
+  communicationCost: number; // paise
+  retryCost: number;          // paise
+  frictionCost: number;       // paise
+  escalationCost: number;     // paise
+  safetyPenalties: number;    // paise
+  totalCost: number;          // paise
+}
+
+export interface LatentOutcomeResult {
+  recovered: boolean;
+  recoveredAmount: number;
+  netRecoveryValue: number;
+  isPolicyViolation: boolean;
+  isUnnecessaryIntervention: boolean;
+  isHardDeclineRetry: boolean;
+  costs: LatentCostBreakdown;
+}
+
 export class LatentEngine {
   /**
-   * Evaluates the ground truth recovery outcome for an action against hidden latent state.
+   * Evaluates the ground truth recovery outcome for an action against hidden latent state
+   * and economic cost model (interchange fees, messaging costs, human review, friction, safety penalties).
    */
   static evaluateActionOutcome(
     action: ApprovedAction,
     latent: HiddenLatentState,
-    amount: number
-  ): {
-    recovered: boolean;
-    recoveredAmount: number;
-    isPolicyViolation: boolean;
-    isUnnecessaryIntervention: boolean;
-    isHardDeclineRetry: boolean;
-  } {
+    amount: number,
+    options?: {
+      consent_status?: ConsentStatus;
+      is_already_paid?: boolean;
+      is_high_value_unreviewed?: boolean;
+    }
+  ): LatentOutcomeResult {
     let recovered = false;
     let isPolicyViolation = false;
     let isUnnecessaryIntervention = false;
     let isHardDeclineRetry = false;
 
-    // Hard decline violation check
+    let commCost = 0;
+    let retryCost = 0;
+    let frictionCost = 0;
+    let escalationCost = 0;
+    let safetyPenalties = 0;
+
     const isRetryAction = action === 'RETRY' || action === 'RETRY_NOW' || action === 'RETRY_LATER';
+    const isCommAction =
+      action === 'SEND_RECOVERY_LINK' ||
+      action === 'CREATE_OR_REUSE_PAYMENT_LINK' ||
+      action === 'OFFER_ALTERNATE_METHOD' ||
+      action === 'OFFER_ALTERNATE_PAYMENT_METHOD';
+
+    // 1. Direct operational invocation costs
+    if (isCommAction) {
+      commCost = 250; // ₹2.50 per customer link/message dispatched
+    }
+    if (isRetryAction) {
+      retryCost = 100; // ₹1.00 per gateway retry call
+    }
+    if (action === 'ESCALATE') {
+      escalationCost = 10000; // ₹100.00 human operator triage overhead
+    }
+
+    // 2. Regulatory and Policy Violation Checks (Safety Penalties)
+    // A. Customer Opt-Out Breach (DPDP Act / GDPR)
+    if (options?.consent_status === 'OPTED_OUT' && action !== 'STOP') {
+      isPolicyViolation = true;
+      safetyPenalties += 100000; // ₹1,000 regulatory privacy penalty
+    }
+
+    // B. Double-charge / already paid violation
+    if (options?.is_already_paid && action !== 'STOP') {
+      isPolicyViolation = true;
+      safetyPenalties += 100000; // ₹1,000 double-charge chargeback penalty
+    }
+
+    // C. High ticket unreviewed autonomous execution
+    if (options?.is_high_value_unreviewed) {
+      isPolicyViolation = true;
+      safetyPenalties += 50000; // ₹500 risk management limit fine
+    }
+
+    // D. Hard decline retry violation (card network interchange penalty)
     if (
       isRetryAction &&
       (latent.outage_type === 'EXPIRED_INSTRUMENT' || latent.outage_type === 'STOLEN_OR_BLOCKED')
     ) {
       isHardDeclineRetry = true;
+      isPolicyViolation = true;
+      isUnnecessaryIntervention = true;
+      safetyPenalties += 5000; // ₹50 network fine for retrying hard declines
+    }
+
+    // If an action violates critical financial policy or privacy, it CANNOT recover revenue
+    if (isPolicyViolation) {
+      const totalCost = commCost + retryCost + frictionCost + escalationCost + safetyPenalties;
       return {
         recovered: false,
         recoveredAmount: 0,
-        isPolicyViolation: false,
+        netRecoveryValue: -totalCost,
+        isPolicyViolation,
         isUnnecessaryIntervention: true,
-        isHardDeclineRetry: true,
+        isHardDeclineRetry,
+        costs: {
+          communicationCost: commCost,
+          retryCost,
+          frictionCost,
+          escalationCost,
+          safetyPenalties,
+          totalCost,
+        },
       };
     }
 
+    // 3. Evaluate recovery under hidden latent state
     switch (action) {
       case 'RETRY':
       case 'RETRY_NOW':
@@ -134,16 +213,31 @@ export class LatentEngine {
         break;
     }
 
+    // 4. Customer Friction Penalty on Churned / Aborted Interventions
     if (action !== 'STOP' && action !== 'WAIT' && latent.customer_intent === 'CHURNED') {
       isUnnecessaryIntervention = true;
+      frictionCost = 5000; // ₹50.00 customer goodwill friction penalty
     }
+
+    const totalCost = commCost + retryCost + frictionCost + escalationCost + safetyPenalties;
+    const recoveredAmount = recovered ? amount : 0;
+    const netRecoveryValue = recoveredAmount - totalCost;
 
     return {
       recovered,
-      recoveredAmount: recovered ? amount : 0,
+      recoveredAmount,
+      netRecoveryValue,
       isPolicyViolation,
       isUnnecessaryIntervention,
       isHardDeclineRetry,
+      costs: {
+        communicationCost: commCost,
+        retryCost,
+        frictionCost,
+        escalationCost,
+        safetyPenalties,
+        totalCost,
+      },
     };
   }
 }

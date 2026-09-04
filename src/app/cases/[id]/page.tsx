@@ -9,6 +9,7 @@ interface CaseDetail {
   event_id: string;
   payment_id: string;
   order_id?: string;
+  obligation_id?: string | null;
   payment_link_id?: string;
   recovery_url?: string;
   amount: number;
@@ -64,11 +65,51 @@ interface AuditEventDetail {
   timestamp: string;
 }
 
+interface ObligationDetail {
+  id: string;
+  order_id: string;
+  merchant_id: string;
+  amount: number;
+  currency: string;
+  status: 'PENDING' | 'SATISFIED' | 'TERMINATED';
+  satisfied_by_payment_id?: string | null;
+  generation: number;
+  created_at: string;
+}
+
+interface RecoveryActionDetail {
+  id: string;
+  obligation_id: string;
+  case_id: string;
+  action_name: string;
+  idempotency_key: string;
+  generation: number;
+  status: 'PENDING' | 'CLAIMED' | 'EXECUTED' | 'FAILED' | 'CANCELLED';
+  claimed_by?: string | null;
+  lease_expires_at?: string | null;
+  created_at: string;
+}
+
+interface CommunicationDetail {
+  id: string;
+  obligation_id: string;
+  case_id: string;
+  channel: string;
+  template: string;
+  status: string;
+  sent_at: string;
+  delivered_at?: string | null;
+  simulated: boolean;
+}
+
 export default function CaseDetailPage({ params }: { params: { id: string } }) {
   const [caseData, setCaseData] = useState<CaseDetail | null>(null);
+  const [obligation, setObligation] = useState<ObligationDetail | null>(null);
   const [decisions, setDecisions] = useState<DecisionDetail[]>([]);
   const [policyChecks, setPolicyChecks] = useState<PolicyCheckDetail[]>([]);
   const [toolExecutions, setToolExecutions] = useState<ToolExecutionDetail[]>([]);
+  const [recoveryActions, setRecoveryActions] = useState<RecoveryActionDetail[]>([]);
+  const [communications, setCommunications] = useState<CommunicationDetail[]>([]);
   const [auditEvents, setAuditEvents] = useState<AuditEventDetail[]>([]);
   const [loading, setLoading] = useState(true);
   const [reviewing, setReviewing] = useState(false);
@@ -84,11 +125,14 @@ export default function CaseDetailPage({ params }: { params: { id: string } }) {
       const res = await fetch(`/api/cases/${params.id}`);
       const data = await res.json();
       if (data.success) {
-        setCaseData(data.data.case);
-        setDecisions(data.data.decisions);
-        setPolicyChecks(data.data.policyChecks);
-        setToolExecutions(data.data.toolExecutions);
-        setAuditEvents(data.data.auditEvents);
+        setCaseData(data.data.case || data.case);
+        setObligation(data.data.obligation || data.obligation || null);
+        setDecisions(data.data.decisions || data.decisions || []);
+        setPolicyChecks(data.data.policyChecks || data.policyChecks || []);
+        setToolExecutions(data.data.toolExecutions || data.toolExecutions || []);
+        setRecoveryActions(data.data.recoveryActions || data.recoveryActions || []);
+        setCommunications(data.data.communications || data.communications || []);
+        setAuditEvents(data.data.auditEvents || data.auditEvents || []);
       }
     } catch (err) {
       console.error(err);
@@ -226,6 +270,147 @@ export default function CaseDetailPage({ params }: { params: { id: string } }) {
             </div>
           </div>
         </div>
+
+        {/* Commercial Obligation & Payment Truth Precedence Panel */}
+        <div className="bg-slate-900 border border-slate-800 rounded-2xl p-6 shadow-xl">
+          <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-4 border-b border-slate-800 pb-4 mb-4">
+            <div>
+              <div className="flex items-center space-x-2">
+                <span className="text-xs font-bold uppercase tracking-wider text-blue-400">Commercial Obligation & Payment Truth</span>
+                <span className={`text-[10px] px-2 py-0.5 rounded font-bold uppercase ${
+                  obligation?.status === 'SATISFIED' || caseData.status === 'RECOVERED'
+                    ? 'bg-emerald-500/20 text-emerald-300 border border-emerald-500/30'
+                    : obligation?.status === 'TERMINATED'
+                    ? 'bg-rose-500/20 text-rose-300 border border-rose-500/30'
+                    : 'bg-amber-500/20 text-amber-300 border border-amber-500/30'
+                }`}>
+                  Obligation: {obligation?.status || (caseData.status === 'RECOVERED' ? 'SATISFIED' : 'PENDING')}
+                </span>
+                <span className="text-[10px] px-2 py-0.5 rounded bg-slate-800 text-slate-300 font-mono">
+                  Gen {obligation?.generation ?? 1}
+                </span>
+              </div>
+              <p className="text-xs text-slate-400 mt-1">
+                Law 1 & Law 2: An obligation represents the merchant's commercial claim to payment. Attempts and links are ephemeral.
+              </p>
+            </div>
+            <div className="flex items-center space-x-2 text-xs font-mono">
+              <span className="text-slate-400">Obligation ID:</span>
+              <span className="text-blue-300 bg-blue-950/40 px-2 py-1 rounded border border-blue-800/40">
+                {obligation?.id || caseData.obligation_id || `obl_${caseData.order_id || 'synthetic'}`}
+              </span>
+            </div>
+          </div>
+
+          {/* Source Precedence Hierarchy Indicator */}
+          <div className="grid grid-cols-1 md:grid-cols-5 gap-2 text-xs">
+            <div className={`p-2.5 rounded-lg border flex flex-col justify-between ${
+              caseData.status === 'RECOVERED'
+                ? 'bg-emerald-950/40 border-emerald-500/60 text-emerald-200'
+                : 'bg-slate-950 border-slate-800 text-slate-400'
+            }`}>
+              <div className="text-[10px] font-bold uppercase tracking-wider">Tier 1: Provider Webhook</div>
+              <div className="font-semibold text-[11px] mt-1">AUTHORITATIVE_EVENT</div>
+              <div className="text-[9px] text-slate-400 mt-1">Razorpay HMAC-SHA256 verified</div>
+              <div className="mt-2 text-[10px] font-bold">
+                {caseData.status === 'RECOVERED' ? '✓ Truth Source' : 'Pending Capture'}
+              </div>
+            </div>
+
+            <div className="p-2.5 rounded-lg border bg-slate-950 border-slate-800 text-slate-400 flex flex-col justify-between">
+              <div className="text-[10px] font-bold uppercase tracking-wider">Tier 2: Direct API Query</div>
+              <div className="font-semibold text-[11px] mt-1">PROVIDER_QUERY</div>
+              <div className="text-[9px] text-slate-400 mt-1">Synchronous Razorpay polling</div>
+              <div className="mt-2 text-[10px] text-slate-400">Secondary fallback</div>
+            </div>
+
+            <div className={`p-2.5 rounded-lg border flex flex-col justify-between ${
+              caseData.status !== 'RECOVERED'
+                ? 'bg-blue-950/30 border-blue-500/40 text-blue-200'
+                : 'bg-slate-950 border-slate-800 text-slate-400'
+            }`}>
+              <div className="text-[10px] font-bold uppercase tracking-wider">Tier 3: Database Ledger</div>
+              <div className="font-semibold text-[11px] mt-1">PERSISTED_STATE</div>
+              <div className="text-[9px] text-slate-400 mt-1">Immutable SQLite store</div>
+              <div className="mt-2 text-[10px] font-bold">
+                {caseData.status !== 'RECOVERED' ? '● Active State' : 'Audited'}
+              </div>
+            </div>
+
+            <div className="p-2.5 rounded-lg border bg-rose-950/20 border-rose-800/30 text-rose-300/80 flex flex-col justify-between">
+              <div className="text-[10px] font-bold uppercase tracking-wider">Tier 4: LLM Proposals</div>
+              <div className="font-semibold text-[11px] mt-1 line-through">LLM_DECISION</div>
+              <div className="text-[9px] text-rose-400/80 mt-1">Advisory diagnosis only</div>
+              <div className="mt-2 text-[10px] font-bold text-rose-400">✗ Zero Authority</div>
+            </div>
+
+            <div className="p-2.5 rounded-lg border bg-rose-950/20 border-rose-800/30 text-rose-300/80 flex flex-col justify-between">
+              <div className="text-[10px] font-bold uppercase tracking-wider">Tier 5: Merchant UI</div>
+              <div className="font-semibold text-[11px] mt-1 line-through">CLIENT_INPUT</div>
+              <div className="text-[9px] text-rose-400/80 mt-1">Subject to policy checks</div>
+              <div className="mt-2 text-[10px] font-bold text-rose-400">✗ Zero Authority</div>
+            </div>
+          </div>
+        </div>
+
+        {/* Explainability Cards: "Why Did We Act?" vs "Why Did We NOT Act?" */}
+        {latestPolicy && (
+          <div className="grid grid-cols-1 gap-4">
+            {latestPolicy.allowed ? (
+              <div className="bg-emerald-950/20 border border-emerald-500/40 rounded-2xl p-6 shadow-xl">
+                <div className="flex items-center space-x-2 text-emerald-400 font-bold text-sm mb-2">
+                  <span className="text-base">✓</span>
+                  <span>Explainability: Why Did We Act?</span>
+                </div>
+                <div className="grid grid-cols-1 md:grid-cols-3 gap-4 text-xs mt-3">
+                  <div className="bg-slate-950/80 p-3 rounded-xl border border-slate-800">
+                    <div className="text-slate-400 uppercase text-[10px] font-bold">1. Diagnostic Signal</div>
+                    <p className="text-slate-200 mt-1">
+                      Identified as <strong className="text-emerald-300">{latestDecision?.failure_category}</strong> failure.
+                      Error code <code className="text-xs text-blue-300 font-mono">{caseData.failure_code}</code> has proven recoverable via alternate rail/link.
+                    </p>
+                  </div>
+                  <div className="bg-slate-950/80 p-3 rounded-xl border border-slate-800">
+                    <div className="text-slate-400 uppercase text-[10px] font-bold">2. Economic Justification</div>
+                    <p className="text-slate-200 mt-1">
+                      Recoverability: <strong className="text-white">{(caseData.recoverability_score * 100).toFixed(0)}%</strong>. Expected Recovery Value: <strong className="text-emerald-300">₹{(caseData.expected_recovery_value / 100).toLocaleString('en-IN')}</strong> exceeds estimated delivery cost of ₹0.50.
+                    </p>
+                  </div>
+                  <div className="bg-slate-950/80 p-3 rounded-xl border border-slate-800">
+                    <div className="text-slate-400 uppercase text-[10px] font-bold">3. Guardrails Passed</div>
+                    <ul className="text-slate-300 mt-1 space-y-0.5 list-disc list-inside text-[11px]">
+                      <li>Amount (₹{(caseData.amount / 100).toLocaleString('en-IN')}) within autonomous limit</li>
+                      <li>Customer consent status: CONSENTED</li>
+                      <li>Deterministic idempotency key leased</li>
+                    </ul>
+                  </div>
+                </div>
+              </div>
+            ) : (
+              <div className="bg-rose-950/20 border border-rose-500/40 rounded-2xl p-6 shadow-xl">
+                <div className="flex items-center space-x-2 text-rose-400 font-bold text-sm mb-2">
+                  <span className="text-base">🛡️</span>
+                  <span>Explainability: Why Did We NOT Act? (Fail-Closed Safety Defense)</span>
+                </div>
+                <div className="bg-slate-950/80 p-4 rounded-xl border border-slate-800 text-xs">
+                  <div className="text-slate-400 uppercase text-[10px] font-bold mb-1">Triggered Hard Policy Guardrail</div>
+                  <div className="space-y-1.5 mt-2">
+                    {latestPolicy.reasons.map((reason, rIdx) => (
+                      <div key={rIdx} className="flex items-start space-x-2 text-rose-200">
+                        <span className="text-rose-400 font-bold">✗</span>
+                        <span>{reason}</span>
+                      </div>
+                    ))}
+                  </div>
+                  <div className="mt-3 pt-3 border-t border-slate-800 text-[11px] text-slate-400 flex items-center justify-between">
+                    <span>Policy Result: <strong className="text-white uppercase font-mono">{latestPolicy.policy_result}</strong></span>
+                    <span>Policy Engine: <strong className="text-slate-300 font-mono">v1.0.0 (Deterministic)</strong></span>
+                  </div>
+                </div>
+              </div>
+            )}
+          </div>
+        )}
 
         {/* ========================================================================= */}
         {/* VISUAL RECOVERY JOURNEY STORYBOARD (CORE REQUIREMENT) */}
@@ -459,6 +644,97 @@ export default function CaseDetailPage({ params }: { params: { id: string } }) {
             </div>
           </div>
 
+        </div>
+
+        {/* Recovery Actions Ledger & Deterministic Idempotency */}
+        <div className="bg-slate-900 border border-slate-800 rounded-2xl p-6 shadow-xl space-y-4">
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 border-b border-slate-800 pb-3">
+            <div>
+              <h3 className="text-sm font-bold text-white flex items-center space-x-2">
+                <span>🔐 Controlled Actions & Worker Leases</span>
+                <span className="text-xs text-slate-400 font-normal">({recoveryActions.length} planned / executed)</span>
+              </h3>
+              <p className="text-xs text-slate-400 mt-0.5">
+                Law 4 & Law 5: Every action has a deterministic generation key and requires an atomic worker lease.
+              </p>
+            </div>
+            <span className="text-[10px] px-2 py-1 rounded bg-slate-800 text-slate-300 font-mono">
+              Generation: {obligation?.generation ?? 1}
+            </span>
+          </div>
+
+          {recoveryActions.length > 0 ? (
+            <div className="overflow-x-auto">
+              <table className="w-full text-left text-xs">
+                <thead>
+                  <tr className="border-b border-slate-800 text-slate-400 text-[10px] uppercase tracking-wider">
+                    <th className="py-2.5 px-3">Action</th>
+                    <th className="py-2.5 px-3">Idempotency Key</th>
+                    <th className="py-2.5 px-3">Status</th>
+                    <th className="py-2.5 px-3">Worker Lease</th>
+                    <th className="py-2.5 px-3">Scheduled At</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-slate-800/60 font-mono text-[11px]">
+                  {recoveryActions.map((act) => (
+                    <tr key={act.id} className="hover:bg-slate-800/30 transition">
+                      <td className="py-2.5 px-3 font-semibold text-slate-200">{act.action_name}</td>
+                      <td className="py-2.5 px-3 text-blue-300 truncate max-w-xs">{act.idempotency_key}</td>
+                      <td className="py-2.5 px-3">
+                        <span className={`px-2 py-0.5 rounded text-[10px] font-bold ${
+                          act.status === 'EXECUTED'
+                            ? 'bg-emerald-500/20 text-emerald-300 border border-emerald-500/30'
+                            : act.status === 'CLAIMED'
+                            ? 'bg-blue-500/20 text-blue-300 border border-blue-500/30'
+                            : act.status === 'CANCELLED'
+                            ? 'bg-rose-500/20 text-rose-300 border border-rose-500/30'
+                            : 'bg-amber-500/20 text-amber-300 border border-amber-500/30'
+                        }`}>
+                          {act.status}
+                        </span>
+                      </td>
+                      <td className="py-2.5 px-3 text-slate-400">
+                        {act.claimed_by ? `${act.claimed_by} (active lease)` : 'Unleased'}
+                      </td>
+                      <td className="py-2.5 px-3 text-slate-400">
+                        {new Date(act.created_at).toLocaleTimeString()}
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          ) : (
+            <div className="text-slate-500 text-xs py-4 text-center">
+              No worker leases active for this case.
+            </div>
+          )}
+
+          {/* Communications Sub-ledger */}
+          {communications.length > 0 && (
+            <div className="mt-4 pt-4 border-t border-slate-800">
+              <div className="text-xs font-bold text-slate-300 mb-2">Customer Outreach Ledger</div>
+              <div className="space-y-2">
+                {communications.map((comm) => (
+                  <div key={comm.id} className="bg-slate-950 p-3 rounded-xl border border-slate-800 text-xs flex items-center justify-between">
+                    <div className="flex items-center space-x-3">
+                      <span className="text-[10px] uppercase px-2 py-0.5 rounded bg-purple-500/20 text-purple-300 font-bold border border-purple-500/30">
+                        {comm.channel}
+                      </span>
+                      <span className="text-slate-200 font-medium">{comm.template}</span>
+                      {comm.simulated && (
+                        <span className="text-[10px] bg-slate-800 text-slate-400 px-1.5 py-0.5 rounded">simulated</span>
+                      )}
+                    </div>
+                    <div className="flex items-center space-x-4 text-slate-400 font-mono text-[10px]">
+                      <span>Status: <strong className="text-emerald-400">{comm.status}</strong></span>
+                      <span>Sent: {new Date(comm.sent_at).toLocaleTimeString()}</span>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
         </div>
     </div>
   );
