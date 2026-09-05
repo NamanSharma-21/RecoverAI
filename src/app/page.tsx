@@ -3,6 +3,7 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import Link from 'next/link';
 import {
+  AlertTriangle,
   ArrowRight,
   ArrowUpRight,
   Check,
@@ -104,6 +105,7 @@ export default function DashboardPage() {
   const [refreshing, setRefreshing] = useState(false);
   const [creatingTest, setCreatingTest] = useState(false);
   const [testSuccessMessage, setTestSuccessMessage] = useState<string | null>(null);
+  const [dashboardError, setDashboardError] = useState<string | null>(null);
 
   // Filters & Search
   const [filterStatus, setFilterStatus] = useState<string>('ALL');
@@ -140,12 +142,16 @@ export default function DashboardPage() {
     try {
       const res = await fetch('/api/cases');
       const data = await res.json();
-      if (data.success) {
+      if (res.ok && data.success) {
         setStats(data.stats);
         setCases(data.cases || []);
+        setDashboardError(null);
+      } else {
+        setDashboardError(data?.error || `Telemetry request returned HTTP ${res.status}`);
       }
-    } catch (err) {
+    } catch (err: any) {
       console.error('Failed to fetch dashboard data:', err);
+      setDashboardError(err.message || 'Network error connecting to telemetry service');
     } finally {
       setLoading(false);
       setRefreshing(false);
@@ -478,6 +484,21 @@ export default function DashboardPage() {
           </button>
         </div>
       </div>
+
+      {dashboardError && (
+        <div className="rounded-[16px] bg-[#fdf2f2] border border-[#f8d7da] p-4 text-xs text-[#b02a37] flex items-center justify-between">
+          <div className="flex items-center gap-2">
+            <AlertTriangle className="w-4 h-4 text-[#dc3545] flex-shrink-0" />
+            <span>Telemetry Service Notice: {dashboardError}</span>
+          </div>
+          <button
+            onClick={fetchDashboardData}
+            className="px-3 py-1 rounded-full bg-[#fdfcfc] border border-[#f8d7da] text-xs text-[#b02a37] hover:bg-[#f8d7da] transition-colors"
+          >
+            Retry
+          </button>
+        </div>
+      )}
 
       {/* 3. BUSINESS OUTCOME KPIS (Clean 5-Card Row) */}
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-4">

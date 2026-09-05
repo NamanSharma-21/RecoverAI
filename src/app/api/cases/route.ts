@@ -1,8 +1,10 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getDatabase } from '@/db/database';
 import { Repository } from '@/db/repository';
+import { ensureCanonicalSeeded } from '@/db/seed';
 
 export const dynamic = 'force-dynamic';
+export const revalidate = 0;
 
 export async function GET(req: NextRequest) {
   try {
@@ -12,6 +14,9 @@ export async function GET(req: NextRequest) {
 
     const db = getDatabase();
     const repo = new Repository(db);
+
+    // Idempotently ensure canonical demo dataset is seeded if database has 0 cases
+    ensureCanonicalSeeded(repo);
 
     const cases = repo.listCases({ status: status || undefined, limit });
     const stats = repo.getDashboardStats();
@@ -28,8 +33,9 @@ export async function GET(req: NextRequest) {
       cases: enrichedCases,
     });
   } catch (err: any) {
+    console.error('[RecoverAI API] Error in /api/cases:', err);
     return NextResponse.json(
-      { success: false, error: err.message },
+      { success: false, error: err.message || 'Internal server error' },
       { status: 500 }
     );
   }

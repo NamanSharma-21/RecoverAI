@@ -1,10 +1,14 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getDatabase } from '@/db/database';
 import { Repository } from '@/db/repository';
+import { ensureCanonicalSeeded } from '@/db/seed';
 import { RecoveryControlLoop } from '@/orchestrator/recovery-loop';
 import { ToolExecutor } from '@/tools/tool-executor';
 import { SimulatorAdapter } from '@/adapters/simulator-adapter';
 import { GOLDEN_SCENARIOS } from '@/simulator/scenarios';
+
+export const dynamic = 'force-dynamic';
+export const revalidate = 0;
 
 export async function POST(req: NextRequest) {
   try {
@@ -13,6 +17,7 @@ export async function POST(req: NextRequest) {
 
     const db = getDatabase();
     const repo = new Repository(db);
+    ensureCanonicalSeeded(repo);
     const provider = new SimulatorAdapter();
     const toolExecutor = new ToolExecutor(provider, repo);
     const loop = new RecoveryControlLoop(repo, toolExecutor);

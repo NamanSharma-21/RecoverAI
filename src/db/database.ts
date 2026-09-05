@@ -272,15 +272,52 @@ export function getDatabase(dbPath?: string): DatabaseSync {
     return defaultDbInstance;
   }
 
-  const targetPath = dbPath || process.env.DATABASE_URL || './data/recoverai.db';
-  const resolvedDir = path.dirname(path.resolve(targetPath));
+  const isVercel = process.env.VERCEL === '1' || !!process.env.VERCEL_ENV;
+  let targetPath = dbPath || process.env.DATABASE_URL;
 
-  if (!fs.existsSync(resolvedDir)) {
-    fs.mkdirSync(resolvedDir, { recursive: true });
+  if (!targetPath) {
+    targetPath = isVercel ? '/tmp/recoverai.db' : './data/recoverai.db';
+  } else if (isVercel && !targetPath.startsWith('/') && !targetPath.startsWith('http') && !targetPath.startsWith('postgres')) {
+    targetPath = path.join('/tmp', path.basename(targetPath));
   }
 
-  defaultDbInstance = new DatabaseSync(path.resolve(targetPath));
-  defaultDbInstance.exec('PRAGMA journal_mode = WAL;');
+  let resolvedTarget = path.resolve(targetPath);
+  let resolvedDir = path.dirname(resolvedTarget);
+
+  try {
+    if (!fs.existsSync(resolvedDir)) {
+      fs.mkdirSync(resolvedDir, { recursive: true });
+    }
+  } catch (dirErr) {
+    console.warn(`[RecoverAI] Could not create directory ${resolvedDir}, falling back to /tmp:`, dirErr);
+    resolvedTarget = path.resolve('/tmp/recoverai.db');
+    resolvedDir = '/tmp';
+    try {
+      if (!fs.existsSync(resolvedDir)) {
+        fs.mkdirSync(resolvedDir, { recursive: true });
+      }
+    } catch {
+      // ignore
+    }
+  }
+
+  try {
+    defaultDbInstance = new DatabaseSync(resolvedTarget);
+  } catch (dbErr) {
+    console.warn(`[RecoverAI] Failed to open SQLite at ${resolvedTarget}, falling back to :memory::`, dbErr);
+    defaultDbInstance = new DatabaseSync(':memory:');
+  }
+
+  try {
+    defaultDbInstance.exec('PRAGMA journal_mode = WAL;');
+  } catch {
+    try {
+      defaultDbInstance.exec('PRAGMA journal_mode = DELETE;');
+    } catch {
+      // ignore
+    }
+  }
+
   defaultDbInstance.exec('PRAGMA foreign_keys = ON;');
   runMigrations(defaultDbInstance);
   defaultDbInstance.exec(SCHEMA_SQL);

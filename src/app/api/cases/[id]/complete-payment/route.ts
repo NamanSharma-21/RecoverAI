@@ -1,10 +1,12 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getDatabase } from '@/db/database';
 import { Repository } from '@/db/repository';
+import { ensureCanonicalSeeded } from '@/db/seed';
 import { ToolExecutor } from '@/tools/tool-executor';
 import { RecoveryControlLoop } from '@/orchestrator/recovery-loop';
 
 export const dynamic = 'force-dynamic';
+export const revalidate = 0;
 
 export async function POST(
   req: NextRequest,
@@ -14,6 +16,7 @@ export async function POST(
     const caseId = params.id;
     const db = getDatabase();
     const repo = new Repository(db);
+    ensureCanonicalSeeded(repo);
     const recoveryCase = repo.getCaseById(caseId);
 
     if (!recoveryCase) {
